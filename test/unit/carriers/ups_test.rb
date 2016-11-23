@@ -1,5 +1,4 @@
 require 'test_helper'
-require 'pry'
 
 class UPSTest < Minitest::Test
   include ActiveShipping::Test::Fixtures
