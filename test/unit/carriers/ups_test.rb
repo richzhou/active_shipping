@@ -1,4 +1,5 @@
 require 'test_helper'
+require 'pry'
 
 class UPSTest < Minitest::Test
   include ActiveShipping::Test::Fixtures
@@ -177,6 +178,21 @@ class UPSTest < Minitest::Test
     end
 
     assert_equal "Failure: Package exceeds the maximum length constraint of 108 inches. Length is the longest side of a package.", e.message
+  end
+
+  def test_handles_warning_messages
+    mock_response = xml_fixture('ups/no_negotiated_rates')
+    @carrier.expects(:commit).returns(mock_response)
+    response = @carrier.find_rates(location_fixtures[:beverly_hills],
+                        location_fixtures[:real_home_as_residential],
+                        package_fixtures.values_at(:chocolate_stuff))
+    rate = response.rates.first
+    expected_messages = [
+      "User Id and Shipper Number combination is not qualified to receive negotiated rates.",
+      "Your invoice may vary from the displayed reference rates",
+      "Ship To Address Classification is changed from Residential to Commercial"
+    ]
+    assert_equal expected_messages, rate.messages
   end
 
   def test_response_parsing_an_undecoded_character
