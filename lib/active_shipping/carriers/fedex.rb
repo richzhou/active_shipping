@@ -184,6 +184,7 @@ module ActiveShipping
 
     def build_shipment_request(origin, destination, packages, options = {})
       imperial = location_uses_imperial(origin)
+      options[:international] = origin.country.name != destination.country.name      
 
       xml_builder = Nokogiri::XML::Builder.new do |xml|
         xml.ProcessShipmentRequest(xmlns: 'http://fedex.com/ws/ship/v13') do
@@ -215,6 +216,56 @@ module ActiveShipping
               end
             end
 
+            if options[:international]
+              xml.CustomsClearanceDetail do
+                xml.DutiesPayment do
+                 xml.PaymentType('RECIPIENT')
+                 xml.Payor do
+                   build_shipment_responsible_party_node(xml, options[:shipper] || destination)
+                 end
+                end
+
+                xml.DocumentContent('DOCUMENTS_ONLY')
+
+                xml.CustomsValue do
+                 xml.Currency(packages.first.options[:currency])
+                 xml.Amount(packages.first.options[:value])
+                end
+
+                xml.CommercialInvoice do
+                  xml.Comments('')
+                  xml.PaymentTerms('')                
+                  xml.CustomerReferences do
+                    xml.CustomerReferenceType('CUSTOMER_REFERENCE')
+                    xml.Value('')
+                  end
+                end
+              
+                contents_description = packages.map {|p| p.options[:description]}.compact.join(',')
+
+                xml.Commodities do
+                 xml.NumberOfPieces(packages.size)
+                 xml.Description(contents_description)
+                 xml.CountryOfManufacture(packages.first.options[:country_of_manufacture])
+                 xml.Weight do
+                   xml.Units(imperial ? 'LB' : 'KG')
+                   xml.Value([((imperial ? packages.first.lbs : packages.first.kgs).to_f * 1000).round / 1000.0, 0.1].max)                   
+                 end
+                 
+                 xml.Quantity(packages.first.options[:item_count].to_i)
+                 xml.QuantityUnits('EA')
+                 xml.UnitPrice do
+                   xml.Currency(packages.first.options[:currency_code])
+                   xml.Amount(packages.first.options[:value])
+                 end
+                 xml.CustomsValue do
+                   xml.Currency(packages.first.options[:currency_code])
+                   xml.Amount(packages.first.options[:value])
+                 end
+                end
+              end
+            end
+                   
             xml.LabelSpecification do
               xml.LabelFormatType('COMMON2D')
               xml.ImageType('PNG')
