@@ -533,7 +533,7 @@ module ActiveShipping
           end
 
           xml.InvoiceLineTotal do
-            xml.CurrencyCode('USD')
+            xml.CurrencyCode(options[:currency_code] || 'USD')
             total_value = packages.inject(0) {|sum, package| sum + package.value}
             xml.MonetaryValue(total_value)
           end
@@ -743,6 +743,13 @@ module ActiveShipping
                 # to 1 decimal place.
                 xml.Weight(dry_ice[:weight])
               end
+            end
+          end
+          
+          if package.options[:insured_value]
+            xml.InsuredValue do
+              xml.CurrencyCode(options[:currency_code] || 'USD')
+              xml.MonetaryValue(package.options[:insured_value])
             end
           end
         end
