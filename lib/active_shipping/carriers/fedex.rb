@@ -197,6 +197,8 @@ module ActiveShipping
             xml.ServiceType(options[:service_type] || 'FEDEX_GROUND')
             xml.PackagingType('YOUR_PACKAGING')
 
+            build_total_insured_node(xml, packages, options)
+                           
             xml.Shipper do
               build_contact_address_nodes(xml, options[:shipper] || origin)
             end
@@ -362,6 +364,8 @@ module ActiveShipping
               xml.DropoffType(options[:dropoff_type] || 'REGULAR_PICKUP')
               xml.PackagingType(options[:packaging_type] || 'YOUR_PACKAGING')
             end
+            
+            build_total_insured_node(xml, packages, options)            
 
             build_location_node(xml, 'Shipper', options[:shipper] || origin)
             build_location_node(xml, 'Recipient', destination)
@@ -514,6 +518,24 @@ module ActiveShipping
           xml.PostalCode(location.postal_code)
           xml.CountryCode(location.country_code(:alpha2))
           xml.Residential(true) unless location.commercial?
+        end
+      end
+    end
+    
+    def build_total_insured_node(xml, packages, options)
+      total_insured_amt = nil
+      packages.each do |p|                             
+        if p.options[:insured_value]
+          if total_insured_amt.nil?
+            total_insured_amt = p.options[:insured_value] 
+          else
+            total_insured_amt += p.options[:insured_value]                   
+          end
+        end
+      end
+      if total_insured_amt
+        xml.TotalInsuredValue do
+          xml.Amount(total_insured_amt)
         end
       end
     end
