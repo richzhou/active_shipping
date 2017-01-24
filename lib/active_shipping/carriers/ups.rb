@@ -980,21 +980,22 @@ module ActiveShipping
       build_document(response, 'ShipmentConfirmResponse')
     end
 
-    def parse_ship_accept(response)
+    def parse_ship_accept(response)      
       xml     = build_document(response, 'ShipmentAcceptResponse')
       success = response_success?(xml)
       message = response_message(xml)
-
+            
       response_info = Hash.from_xml(response).values.first
       packages = response_info["ShipmentResults"]["PackageResults"]
       packages = [packages] if Hash === packages
       labels = packages.map do |package|
         Label.new(package["TrackingNumber"], Base64.decode64(package["LabelImage"]["GraphicImage"]))
       end
-
-      LabelResponse.new(success, message, response_info, {labels: labels})
+      
+      high_value_report = Base64.decode64(response_info['ShipmentResults']['ControlLogReceipt']['GraphicImage'])
+      LabelResponse.new(success, message, response_info, {labels: labels, high_value_report: high_value_report })
     end
-
+    
     def commit(action, request, test = false)
       ssl_post("#{test ? TEST_URL : LIVE_URL}/#{RESOURCES[action]}", request)
     end
