@@ -401,6 +401,14 @@ module ActiveShipping
                   end
                 end
               end
+            elsif options[:bill_receiver]
+              xml.PaymentInformation do
+                xml.FreightCollect do
+                  xml.BillReceiver do
+                    xml.AccountNumber(options[:billing_account])
+                  end
+                end
+              end              
             elsif options[:bill_third_party]
               xml.PaymentInformation do
                 xml.BillThirdParty do
