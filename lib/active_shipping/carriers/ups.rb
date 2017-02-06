@@ -175,7 +175,7 @@ module ActiveShipping
       parse_tracking_response(response, options)
     end
 
-    def create_shipment(origin, destination, packages, options = {})
+    def create_shipment(origin, destination, packages, options = {})      
       options = @options.merge(options)
       packages = Array(packages)
       access_request = build_access_request
@@ -183,7 +183,7 @@ module ActiveShipping
       # STEP 1: Confirm.  Validation step, important for verifying price.
       confirm_request = build_shipment_request(origin, destination, packages, options)
       logger.debug(confirm_request) if logger
-
+      
       confirm_response = commit(:ship_confirm, save_request(access_request + confirm_request), (options[:test] || false))
       logger.debug(confirm_response) if logger
 
@@ -406,6 +406,9 @@ module ActiveShipping
                 xml.FreightCollect do
                   xml.BillReceiver do
                     xml.AccountNumber(options[:billing_account])
+                    xml.Address do
+                      xml.PostalCode(destination.postal_code)
+                    end
                   end
                 end
               end              
@@ -994,14 +997,13 @@ module ActiveShipping
       message = response_message(xml)
             
       response_info = Hash.from_xml(response).values.first
+      
       packages = response_info["ShipmentResults"]["PackageResults"]
       packages = [packages] if Hash === packages
       labels = packages.map do |package|
         Label.new(package["TrackingNumber"], Base64.decode64(package["LabelImage"]["GraphicImage"]))
-      end
-      
-      high_value_report = Base64.decode64(response_info['ShipmentResults']['ControlLogReceipt']['GraphicImage'])
-      LabelResponse.new(success, message, response_info, {labels: labels, high_value_report: high_value_report })
+      end      
+      LabelResponse.new(success, message, response_info, {labels: labels })
     end
     
     def commit(action, request, test = false)
