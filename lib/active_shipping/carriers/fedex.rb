@@ -268,10 +268,14 @@ module ActiveShipping
               end
             end
                    
+            #https://www.fedex.com/us/developer/WebHelp/ws/2014/dvg/WS_DVG_WebHelp/13_3_2_Generating_a_Laser_Label.htm
+            label_format = options[:label_format] ? options[:label_format].upcase : 'PNG'
+            label_size = options[:label_size] ? options[:label_size] : 'STOCK_4X6'
+            
             xml.LabelSpecification do
               xml.LabelFormatType('COMMON2D')
-              xml.ImageType('PNG')
-              xml.LabelStockType('PAPER_7X4.75')
+              xml.ImageType(label_format)
+              xml.LabelStockType(label_size)
             end
 
             xml.RateRequestTypes('ACCOUNT')
