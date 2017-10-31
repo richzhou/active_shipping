@@ -196,6 +196,7 @@ module ActiveShipping
             xml.DropoffType('REGULAR_PICKUP')
             xml.ServiceType(options[:service_type] || 'FEDEX_GROUND')
             xml.PackagingType('YOUR_PACKAGING')
+            
 
             build_total_insured_node(xml, packages, options)
                            
@@ -216,6 +217,13 @@ module ActiveShipping
               xml.Payor do
                 build_shipment_responsible_party_node(xml, options[:shipper] || origin)
               end
+            end
+            
+            if options[:smart_post_hub_id]
+              xml.SmartPostDetail do
+                xml.Indicia(options[:smart_post_indicia] || 'PARCEL_SELECT')
+                xml.HubId(options[:smart_post_hub_id])
+              end                          
             end
 
             if options[:international]
@@ -305,7 +313,7 @@ module ActiveShipping
                   end
                 end
               end
-            end
+            end            
           end
         end
       end
