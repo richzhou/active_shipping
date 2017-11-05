@@ -179,6 +179,15 @@ module ActiveShipping
       # See Fedex Developper Guide
       35
     end
+    
+    def void_shipment(tracking, options={})
+      options = @options.merge(options)
+      request = build_delete_shipment_request(tracking)
+      logger.debug(request) if logger
+
+      response = commit(save_request(request), (options[:test] || false))
+      parse_delete_shipment_response(response)
+    end
 
     protected
 
@@ -765,6 +774,36 @@ module ActiveShipping
                            :tracking_number => tracking_number
       )
     end
+    
+    def build_delete_shipment_request(tracking)
+      xml_builder = Nokogiri::XML::Builder.new do |xml|
+        xml.DeleteShipmentRequest(xmlns: 'http://fedex.com/ws/ship/v13') do
+          build_request_header(xml)
+          build_version_node(xml, 'ship', 13, 0 ,0)
+          
+          xml.TrackingId do
+            xml.TrackingIdType("FEDEX")
+            xml.TrackingNumber(tracking)
+          end
+          xml.DeletionControl("DELETE_ALL_PACKAGES")
+        end
+      end
+      xml_builder.to_xml
+  
+    end
+    
+    def parse_delete_shipment_response(response)
+      xml = build_document(response, 'ShipmentReply')
+      
+      success = response_success?(xml)
+      message = response_message(xml)
+      
+      if success
+        true
+      else
+        raise ResponseError.new("Delete shipment failed with message: #{message}")
+      end
+    end    
 
     def ship_timestamp(delay_in_hours)
       delay_in_hours ||= 0
