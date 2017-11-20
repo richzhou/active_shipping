@@ -266,6 +266,7 @@ module ActiveShipping
                  xml.NumberOfPieces(packages.size)
                  xml.Description(contents_description)
                  xml.CountryOfManufacture(packages.first.options[:country_of_manufacture])
+                 xml.HarmonizedCode(packages.first.options[:country_of_manufacture])
                  xml.Weight do
                    xml.Units(imperial ? 'LB' : 'KG')
                    xml.Value([((imperial ? packages.first.lbs : packages.first.kgs).to_f * 1000).round / 1000.0, 0.1].max)                   
@@ -281,6 +282,16 @@ module ActiveShipping
                    xml.Currency(packages.first.options[:currency_code])
                    xml.Amount(packages.first.options[:value])
                  end
+                end
+              end
+            end
+            
+            #fedex api 42.1.1.2 Commercial Invoice
+            if options[:international]
+              xml.SpecialServicesRequested do
+                xml.ShipmentSpecialServicesRequested do
+                  xml.SpecialServicesTypes("ELECTRONIC_TRADE_DOCUMENTS")
+                  xml.EtdDetail("COMMERCIAL_INVOICE")
                 end
               end
             end
@@ -635,7 +646,8 @@ module ActiveShipping
       message = response_message(xml)
 
       response_info = Hash.from_xml(response)
-      tracking_number = xml.css("CompletedPackageDetails TrackingIds TrackingNumber").text
+      
+      tracking_number = xml.css("CompletedPackageDetails TrackingIds TrackingNumber").last.text
       base_64_image = xml.css("Label Image").text
 
       labels = [Label.new(tracking_number, Base64.decode64(base_64_image))]
