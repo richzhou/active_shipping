@@ -266,7 +266,7 @@ module ActiveShipping
                  xml.NumberOfPieces(packages.size)
                  xml.Description(contents_description)
                  xml.CountryOfManufacture(packages.first.options[:country_of_manufacture])
-                 xml.HarmonizedCode(packages.first.options[:country_of_manufacture])
+                # xml.HarmonizedCode()
                  xml.Weight do
                    xml.Units(imperial ? 'LB' : 'KG')
                    xml.Value([((imperial ? packages.first.lbs : packages.first.kgs).to_f * 1000).round / 1000.0, 0.1].max)                   
