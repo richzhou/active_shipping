@@ -288,12 +288,16 @@ module ActiveShipping
             
             #fedex api 42.1.1.2 Commercial Invoice
             if options[:international]
-              xml.SpecialServicesRequested do
-                xml.ShipmentSpecialServicesRequested do
-                  xml.SpecialServicesTypes("ELECTRONIC_TRADE_DOCUMENTS")
-                  xml.EtdDetail("COMMERCIAL_INVOICE")
-                end
-              end
+              # xml.SpecialServicesRequested do
+              #   xml.ShipmentSpecialServicesRequested do
+              #     xml.SpecialServicesTypes("ELECTRONIC_TRADE_DOCUMENTS")
+              #     xml.EtdDetail("COMMERCIAL_INVOICE")
+              #   end
+              # end
+              
+              # xml.ShippingDocumentSpecification do
+        #         xml.ShippingDocumentType("COMMERCIAL_INVOICE")
+        #       end
             end
                    
             #https://www.fedex.com/us/developer/WebHelp/ws/2014/dvg/WS_DVG_WebHelp/13_3_2_Generating_a_Laser_Label.htm
