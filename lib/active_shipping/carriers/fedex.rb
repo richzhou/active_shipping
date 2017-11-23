@@ -170,7 +170,8 @@ module ActiveShipping
 
       request = build_shipment_request(origin, destination, packages, options)
       logger.debug(request) if logger
-
+      File.open("/Users/richard/fedex.xml", 'w') { |file| file.write(request.to_s) }
+      
       response = commit(save_request(request), (options[:test] || false))
       parse_ship_response(response)
     end
@@ -196,9 +197,9 @@ module ActiveShipping
       options[:international] = origin.country.name != destination.country.name      
 
       xml_builder = Nokogiri::XML::Builder.new do |xml|
-        xml.ProcessShipmentRequest(xmlns: 'http://fedex.com/ws/ship/v13') do
+        xml.ProcessShipmentRequest(xmlns: 'http://fedex.com/ws/ship/v17') do
           build_request_header(xml)
-          build_version_node(xml, 'ship', 13, 0 ,0)
+          build_version_node(xml, 'ship', 17, 0 ,0)
 
           xml.RequestedShipment do
             xml.ShipTimestamp(ship_timestamp(options[:turn_around_time]).iso8601(0))
@@ -235,7 +236,9 @@ module ActiveShipping
               end                          
             end
 
-            if options[:international]
+
+            
+            if options[:international]              
               xml.CustomsClearanceDetail do
                 xml.DutiesPayment do
                  xml.PaymentType('RECIPIENT')
@@ -244,7 +247,7 @@ module ActiveShipping
                  end
                 end
 
-                xml.DocumentContent('DOCUMENTS_ONLY')
+                xml.DocumentContent('NON_DOCUMENTS')
 
                 xml.CustomsValue do
                  xml.Currency(packages.first.options[:currency])
@@ -286,30 +289,44 @@ module ActiveShipping
               end
             end
             
-            #fedex api 42.1.1.2 Commercial Invoice
-            if options[:international]
-              # xml.SpecialServicesRequested do
-              #   xml.ShipmentSpecialServicesRequested do
-              #     xml.SpecialServicesTypes("ELECTRONIC_TRADE_DOCUMENTS")
-              #     xml.EtdDetail("COMMERCIAL_INVOICE")
-              #   end
-              # end
-              
-              # xml.ShippingDocumentSpecification do
-        #         xml.ShippingDocumentType("COMMERCIAL_INVOICE")
-        #       end
-            end
-                   
+ 
             #https://www.fedex.com/us/developer/WebHelp/ws/2014/dvg/WS_DVG_WebHelp/13_3_2_Generating_a_Laser_Label.htm
             label_format = options[:label_format] ? options[:label_format].upcase : 'PNG'
             label_size = options[:label_size] ? options[:label_size] : 'STOCK_4X6'
             
             xml.LabelSpecification do
               xml.LabelFormatType('COMMON2D')
-              xml.ImageType(label_format)
-              xml.LabelStockType(label_size)
+              xml.ImageType('PDF')
+              xml.LabelStockType('PAPER_7X4.75')
+            end
+            
+
+            
+            #fedex api 42.1.1.2 Commercial Invoice
+            if options[:international]
+              xml.ShippingDocumentSpecification do
+                xml.ShippingDocumentTypes("COMMERCIAL_INVOICE")
+                xml.CommercialInvoiceDetail do
+                  xml.DocumentFormat do
+                    xml.StockType('PAPER_7X4.75')
+                    xml.ImageType('PDF')
+                  end
+                end
+              end
             end
 
+
+            if options[:international]
+              xml.SpecialServicesRequested do
+                xml.ShipmentSpecialServicesRequested do
+                  xml.SpecialServicesTypes("ELECTRONIC_TRADE_DOCUMENTS")
+                  xml.EtdDetail do
+                    xml.RequestedDocumentCopies("COMMERCIAL_INVOICE")
+                  end
+                end
+              end
+            end
+            
             xml.RateRequestTypes('ACCOUNT')
 
             xml.PackageCount(packages.size)
@@ -645,14 +662,22 @@ module ActiveShipping
     end
 
     def parse_ship_response(response)
+      puts "response is #{response.to_s}"
+      Rails.logger.debug "response is #{response.to_s}"
+      tracking_number = nil
+      base_64_image = nil
       xml = build_document(response, 'ProcessShipmentReply')
       success = response_success?(xml)
       message = response_message(xml)
 
       response_info = Hash.from_xml(response)
+      Rails.logger.debug "xml is #{xml.css('CompletedPackageDetails TrackingIds TrackingNumber')}"
       
-      tracking_number = xml.css("CompletedPackageDetails TrackingIds TrackingNumber").last.text
-      base_64_image = xml.css("Label Image").text
+      puts "xml is #{xml.css('CompletedPackageDetails TrackingIds TrackingNumber')}"
+      if success
+        tracking_number = xml.css("CompletedPackageDetails TrackingIds TrackingNumber").last.text
+        base_64_image = xml.css("Label Image").text
+      end
 
       labels = [Label.new(tracking_number, Base64.decode64(base_64_image))]
       LabelResponse.new(success, message, response_info, {labels: labels})
