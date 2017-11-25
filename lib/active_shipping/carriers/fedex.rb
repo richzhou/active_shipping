@@ -169,9 +169,7 @@ module ActiveShipping
       raise Error, "Multiple packages are not supported yet." if packages.length > 1
 
       request = build_shipment_request(origin, destination, packages, options)
-      logger.debug(request) if logger
-      File.open("/Users/richard/fedex.xml", 'w') { |file| file.write(request.to_s) }
-      
+      logger.debug(request) if logger      
       response = commit(save_request(request), (options[:test] || false))
       parse_ship_response(response)
     end
@@ -237,13 +235,23 @@ module ActiveShipping
             end
 
 
+            if options[:international]
+              xml.SpecialServicesRequested do
+                xml.SpecialServiceTypes("ELECTRONIC_TRADE_DOCUMENTS")
+                xml.EtdDetail do
+                  xml.RequestedDocumentCopies("COMMERCIAL_INVOICE")
+                end
+              end
+            end
             
             if options[:international]              
               xml.CustomsClearanceDetail do
                 xml.DutiesPayment do
                  xml.PaymentType('RECIPIENT')
-                 xml.Payor do
-                   build_shipment_responsible_party_node(xml, options[:shipper] || destination)
+                 if options[:shipper]
+                   xml.Payor do
+                     build_shipment_responsible_party_node(xml, options[:shipper])
+                   end
                  end
                 end
 
@@ -259,7 +267,7 @@ module ActiveShipping
                   xml.PaymentTerms('')                
                   xml.CustomerReferences do
                     xml.CustomerReferenceType('CUSTOMER_REFERENCE')
-                    xml.Value('')
+                    xml.Value()
                   end
                 end
               
@@ -296,8 +304,8 @@ module ActiveShipping
             
             xml.LabelSpecification do
               xml.LabelFormatType('COMMON2D')
-              xml.ImageType('PDF')
-              xml.LabelStockType('PAPER_7X4.75')
+              xml.ImageType(label_format)
+              xml.LabelStockType(label_size)
             end
             
 
@@ -307,21 +315,9 @@ module ActiveShipping
               xml.ShippingDocumentSpecification do
                 xml.ShippingDocumentTypes("COMMERCIAL_INVOICE")
                 xml.CommercialInvoiceDetail do
-                  xml.DocumentFormat do
-                    xml.StockType('PAPER_7X4.75')
-                    xml.ImageType('PDF')
-                  end
-                end
-              end
-            end
-
-
-            if options[:international]
-              xml.SpecialServicesRequested do
-                xml.ShipmentSpecialServicesRequested do
-                  xml.SpecialServicesTypes("ELECTRONIC_TRADE_DOCUMENTS")
-                  xml.EtdDetail do
-                    xml.RequestedDocumentCopies("COMMERCIAL_INVOICE")
+                  xml.Format do
+                    xml.ImageType('PDF')                    
+                    xml.StockType('PAPER_LETTER')
                   end
                 end
               end
@@ -662,8 +658,6 @@ module ActiveShipping
     end
 
     def parse_ship_response(response)
-      puts "response is #{response.to_s}"
-      Rails.logger.debug "response is #{response.to_s}"
       tracking_number = nil
       base_64_image = nil
       xml = build_document(response, 'ProcessShipmentReply')
@@ -671,16 +665,14 @@ module ActiveShipping
       message = response_message(xml)
 
       response_info = Hash.from_xml(response)
-      Rails.logger.debug "xml is #{xml.css('CompletedPackageDetails TrackingIds TrackingNumber')}"
-      
-      puts "xml is #{xml.css('CompletedPackageDetails TrackingIds TrackingNumber')}"
       if success
         tracking_number = xml.css("CompletedPackageDetails TrackingIds TrackingNumber").last.text
         base_64_image = xml.css("Label Image").text
       end
 
       labels = [Label.new(tracking_number, Base64.decode64(base_64_image))]
-      LabelResponse.new(success, message, response_info, {labels: labels})
+      commercial_invoice = xml.xpath("//ShipmentDocuments[Type='COMMERCIAL_INVOICE']//Image").text   
+      LabelResponse.new(success, message, response_info, {labels: labels, commercial_invoice: commercial_invoice})
     end
 
     def business_days_from(date, days, is_home_delivery=false)
