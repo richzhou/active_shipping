@@ -247,7 +247,11 @@ module ActiveShipping
             if options[:international]              
               xml.CustomsClearanceDetail do
                 xml.DutiesPayment do
-                 xml.PaymentType('RECIPIENT')
+                  if options[:duty_sender]
+                    xml.PaymentType('SENDER')
+                  else
+                    xml.PaymentType('RECIPIENT')                   
+                  end     
                  if options[:shipper]
                    xml.Payor do
                      build_shipment_responsible_party_node(xml, options[:shipper])
