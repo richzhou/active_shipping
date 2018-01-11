@@ -169,8 +169,8 @@ module ActiveShipping
       raise Error, "Multiple packages are not supported yet." if packages.length > 1
 
       request = build_shipment_request(origin, destination, packages, options)
-      logger.debug(request) if logger      
-      response = commit(save_request(request), (options[:test] || false))
+      logger.debug(request) if logger    
+      response = commit(save_request(request), (options[:test] || false))      
       parse_ship_response(response)
     end
 
@@ -664,6 +664,8 @@ module ActiveShipping
     def parse_ship_response(response)
       tracking_number = nil
       base_64_image = nil
+      commercial_invoice = nil
+      labels = []
       xml = build_document(response, 'ProcessShipmentReply')
       success = response_success?(xml)
       message = response_message(xml)
@@ -672,11 +674,12 @@ module ActiveShipping
       if success
         tracking_number = xml.css("CompletedPackageDetails TrackingIds TrackingNumber").last.text
         base_64_image = xml.css("Label Image").text
+        labels = [Label.new(tracking_number, Base64.decode64(base_64_image))]
+        commercial_invoice = xml.xpath("//ShipmentDocuments[Type='COMMERCIAL_INVOICE']//Image").text           
+        commercial_invoice = nil if commercial_invoice.blank?
       end
 
-      labels = [Label.new(tracking_number, Base64.decode64(base_64_image))]
-      commercial_invoice = xml.xpath("//ShipmentDocuments[Type='COMMERCIAL_INVOICE']//Image").text   
-      LabelResponse.new(success, message, response_info, {labels: labels, commercial_invoice: commercial_invoice})
+       LabelResponse.new(success, message, response_info, {labels: labels, commercial_invoice: commercial_invoice})
     end
 
     def business_days_from(date, days, is_home_delivery=false)
