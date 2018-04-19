@@ -134,6 +134,9 @@ module ActiveShipping
       'TR' => :transfer
     )
 
+    #a list of countries that support electronic trade documents
+    ELECTRONIC_TRADE_DOCUMENT_COUNTRIES=['AF','AL','AO','AW','AU','AT','BS','BH','BD','BB','BE','BM','BQ','VG','BN','KH','CA','KY','GB','CN','HR','CW','CY','CZ','DK','DJ','DO','TL','EG','SV','GB','EE','FI','FR','DE','GH','GP','GU','GT','HN','HK','HU','IS','IN','ID','IE','IL','IT','CI','JM','JP','JO','KE','KR','KW','LA','LV','LS','LI','LT','LU','MO','MG','MY','MT','MH','MU','MX','FM','MC','MS','NL','AN','NZ','NI','GB','MP','No','OM','PW','PS','PA','PH','PL','PT','PR','BQ','KN','LC','MF','SM','SA','GB','SX','SG','BQ','SK','SI','ZA','ES','LK','SE','CH','TW','TH','TL','TG','TT','TN','TC','VI','AE','US','VA','GB']
+
     def self.service_name_for_code(service_code)
       SERVICE_TYPES[service_code] || "FedEx #{service_code.titleize.sub(/Fedex /, '')}"
     end
@@ -237,7 +240,9 @@ module ActiveShipping
 
             if options[:international]
               xml.SpecialServicesRequested do
-                xml.SpecialServiceTypes("ELECTRONIC_TRADE_DOCUMENTS")
+                if ELECTRONIC_TRADE_DOCUMENT_COUNTRIES.include?(destination.country_code)
+                  xml.SpecialServiceTypes("ELECTRONIC_TRADE_DOCUMENTS")
+                end
                 xml.EtdDetail do
                   xml.RequestedDocumentCopies("COMMERCIAL_INVOICE")
                 end
@@ -375,6 +380,8 @@ module ActiveShipping
           end
         end
       end
+      
+      puts "xml_builder.to_xml #{xml_builder.to_xml}"
       xml_builder.to_xml
     end
 
