@@ -277,27 +277,44 @@ module ActiveShipping
               
                 contents_description = packages.map {|p| p.options[:description]}.compact.join(',')
 
-                xml.Commodities do
-                 xml.NumberOfPieces(packages.size)
-                 xml.Description(contents_description)
-                 xml.CountryOfManufacture(packages.first.options[:country_of_manufacture])
-                # xml.HarmonizedCode()
-                 xml.Weight do
-                   xml.Units(imperial ? 'LB' : 'KG')
-                   xml.Value([((imperial ? packages.first.lbs : packages.first.kgs).to_f * 1000).round / 1000.0, 0.1].max)                   
-                 end
-                 
-                 xml.Quantity(packages.first.options[:item_count].to_i)
-                 xml.QuantityUnits('EA')
-                 xml.UnitPrice do
-                   xml.Currency(packages.first.options[:currency_code])
-                   xml.Amount(packages.first.options[:value])
-                 end
-                 xml.CustomsValue do
-                   xml.Currency(packages.first.options[:currency_code])
-                   xml.Amount(packages.first.options[:value])
-                 end
+                index = 0
+                packages.each do |p|
+                  next if p.options[:order_lines].nil?
+                  p.options[:order_lines].each do |line|    
+                    index += 1
+                    xml.Commodities do                                               
+                      xml.NumberOfPieces(1)
+                      xml.Description(line[:description])
+                      xml.CountryOfManufacture(packages.first.options[:country_of_manufacture])
+                      if line[:harmonized_code]
+                        xml.HarmonizedCode(line[:harmonized_code])
+                      end
+                      xml.Weight do
+                        xml.Units(line[:weight_unit])
+                        xml.Value(line[:weight])                   
+                      end
+               
+                      xml.Quantity(line[:quantity].to_i)
+                      xml.QuantityUnits('EA')
+                      xml.UnitPrice do
+                        xml.Currency(packages.first.options[:currency_code])
+                        xml.Amount(line[:unit_price])
+                      end
+                    
+                      xml.CustomsValue do
+                        xml.Currency(packages.first.options[:currency_code])
+                        price = line[:unit_price].to_d 
+                        if price == 0
+                          price = 1
+                        end
+                        xml.Amount(price)
+                      end
+                    
+                    end
+                  end
                 end
+                
+                
               end
             end
             
