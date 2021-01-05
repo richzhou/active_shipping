@@ -196,7 +196,7 @@ module ActiveShipping #:nodoc:
         when Float
           (money * 100).round
         when String
-          money =~ /\./ ? (money.to_f * 100).round : money.to_i
+          money =~ /\./ ? (money.to_f * 100).round : money.to_i * 100 #if it is whole number, assume it is in dollar and not cents
         else
           money.to_i
         end
