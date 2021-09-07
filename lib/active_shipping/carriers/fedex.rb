@@ -381,7 +381,6 @@ module ActiveShipping
         end
       end
       
-      puts "xml_builder.to_xml #{xml_builder.to_xml}"
       xml_builder.to_xml
     end
 
