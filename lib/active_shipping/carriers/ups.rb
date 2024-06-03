@@ -153,9 +153,9 @@ module ActiveShipping
       origin, destination = upsified_location(origin), upsified_location(destination)
       options = @options.merge(options)
       packages = Array(packages)
-      access_request = build_access_request
+      # access_request = build_access_request
       rate_request = build_rate_request(origin, destination, packages, options)
-      response = commit(:rates, save_request(access_request + rate_request), options[:test])
+      response = commit(:rates, save_request(rate_request), options[:test])
       parse_rate_response(origin, destination, packages, response, options)
     end
 
@@ -170,22 +170,22 @@ module ActiveShipping
     #   response should a list of shipment tracking events if successful.
     def find_tracking_info(tracking_number, options = {})
       options = @options.merge(options)
-      access_request = build_access_request
+      # access_request = build_access_request
       tracking_request = build_tracking_request(tracking_number, options)
-      response = commit(:track, save_request(access_request + tracking_request), options[:test])
+      response = commit(:track, save_request(tracking_request), options[:test])
       parse_tracking_response(response, options)
     end
 
     def create_shipment(origin, destination, packages, options = {})      
       options = @options.merge(options)
       packages = Array(packages)
-      access_request = build_access_request
+      # access_request = build_access_request
 
       # STEP 1: Confirm.  Validation step, important for verifying price.
       confirm_request = build_shipment_request(origin, destination, packages, options)
       logger.debug(confirm_request) if logger
       
-      confirm_response = commit(:ship_confirm, save_request(access_request + confirm_request), (options[:test] || false))
+      confirm_response = commit(:ship_confirm, save_request(confirm_request), (options[:test] || false))
       logger.debug(confirm_response) if logger
 
       # ... now, get the digest, it's needed to get the label.  In theory,
@@ -201,7 +201,7 @@ module ActiveShipping
       accept_request = build_accept_request(digest, options)
       logger.debug(accept_request) if logger
 
-      accept_response = commit(:ship_accept, save_request(access_request + accept_request), (options[:test] || false))
+      accept_response = commit(:ship_accept, save_request(accept_request), (options[:test] || false))
       logger.debug(accept_response) if logger
 
       # ...finally, build a map from the response that contains
@@ -213,17 +213,17 @@ module ActiveShipping
       origin, destination = upsified_location(origin), upsified_location(destination)
       options = @options.merge(options)
       packages = Array(packages)
-      access_request = build_access_request
+      # access_request = build_access_request
       dates_request = build_delivery_dates_request(origin, destination, packages, pickup_date, options)
-      response = commit(:delivery_dates, save_request(access_request + dates_request), (options[:test] || false))
+      response = commit(:delivery_dates, save_request(dates_request), (options[:test] || false))
       parse_delivery_dates_response(origin, destination, packages, response, options)
     end
 
     def void_shipment(tracking, options={})
       options = @options.merge(options)
-      access_request = build_access_request
+      # access_request = build_access_request
       void_request = build_void_request(tracking)
-      response = commit(:void, save_request(access_request + void_request), (options[:test] || false))
+      response = commit(:void, save_request(void_request), (options[:test] || false))
       parse_void_response(response, options)
     end
 
@@ -1026,7 +1026,7 @@ module ActiveShipping
     end
     
     def commit(action, request, test = false)
-      response = ssl_post("#{test ? TEST_URL : LIVE_URL}/#{RESOURCES[action]}", request)
+      response = ssl_post("#{test ? TEST_URL : LIVE_URL}/#{RESOURCES[action]}", request, {'Authorization' => "Bearer #{@options[:access_token]}"} )
       response.encode('utf-8', 'iso-8859-1')
     end
 
