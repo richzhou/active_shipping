@@ -13,12 +13,12 @@ module ActiveShipping
     LIVE_URL = 'https://onlinetools.ups.com'
 
     RESOURCES = {
-      :rates => 'api/ups.app/xml/Rate',
-      :track => 'api/ups.app/xml/Track',
-      :ship_confirm => 'api/ups.app/xml/ShipConfirm',
-      :ship_accept => 'api/ups.app/xml/ShipAccept',
-      :delivery_dates =>  'api/ups.app/xml/TimeInTransit',
-      :void =>  'api/ups.app/xml/Void'
+      :rates => 'ups.app/xml/Rate',
+      :track => 'ups.app/xml/Track',
+      :ship_confirm => 'ups.app/xml/ShipConfirm',
+      :ship_accept => 'ups.app/xml/ShipAccept',
+      :delivery_dates =>  'ups.app/xml/TimeInTransit',
+      :void =>  'ups.app/xml/Void'
     }
 
     PICKUP_CODES = HashWithIndifferentAccess.new(
@@ -153,10 +153,19 @@ module ActiveShipping
       origin, destination = upsified_location(origin), upsified_location(destination)
       options = @options.merge(options)
       packages = Array(packages)
-      # access_request = build_access_request
+
       rate_request = build_rate_request(origin, destination, packages, options)
-      response = commit(:rates, save_request(rate_request), options[:test])
+
+      unless @options[:use_oauth]
+        access_request = build_access_request
+        request = save_request(access_request + rate_request)
+      else
+        request = save_request(rate_request)
+      end
+
+      response = commit(:rates, request, options[:test])
       parse_rate_response(origin, destination, packages, response, options)
+
     end
 
     # Retrieves tracking information for a previous shipment
@@ -169,23 +178,38 @@ module ActiveShipping
     # @return [ActiveShipping::TrackingResponse] The response from the carrier. This
     #   response should a list of shipment tracking events if successful.
     def find_tracking_info(tracking_number, options = {})
+
       options = @options.merge(options)
-      # access_request = build_access_request
       tracking_request = build_tracking_request(tracking_number, options)
-      response = commit(:track, save_request(tracking_request), options[:test])
+
+      unless @options[:use_oauth]
+        access_request = build_access_request
+        request = save_request(access_request + tracking_request)
+      else
+        request = save_request(tracking_request)
+      end
+
+      response = commit(:track, request, options[:test])
       parse_tracking_response(response, options)
+
     end
 
     def create_shipment(origin, destination, packages, options = {})      
       options = @options.merge(options)
       packages = Array(packages)
-      # access_request = build_access_request
 
       # STEP 1: Confirm.  Validation step, important for verifying price.
       confirm_request = build_shipment_request(origin, destination, packages, options)
       logger.debug(confirm_request) if logger
+
+      unless @options[:use_oauth]
+        access_request = build_access_request
+        request = save_request(access_request + confirm_request)
+      else
+        request = save_request(confirm_request)
+      end
       
-      confirm_response = commit(:ship_confirm, save_request(confirm_request), (options[:test] || false))
+      confirm_response = commit(:ship_confirm, request, (options[:test] || false))
       logger.debug(confirm_response) if logger
 
       # ... now, get the digest, it's needed to get the label.  In theory,
@@ -213,18 +237,36 @@ module ActiveShipping
       origin, destination = upsified_location(origin), upsified_location(destination)
       options = @options.merge(options)
       packages = Array(packages)
-      # access_request = build_access_request
+
       dates_request = build_delivery_dates_request(origin, destination, packages, pickup_date, options)
-      response = commit(:delivery_dates, save_request(dates_request), (options[:test] || false))
+
+      unless @options[:use_oauth]
+        access_request = build_access_request
+        request = save_request(access_request + dates_request)
+      else
+        request = save_request(dates_request)
+      end
+
+      response = commit(:delivery_dates, request, (options[:test] || false))
       parse_delivery_dates_response(origin, destination, packages, response, options)
+
     end
 
     def void_shipment(tracking, options={})
       options = @options.merge(options)
-      # access_request = build_access_request
+
       void_request = build_void_request(tracking)
-      response = commit(:void, save_request(void_request), (options[:test] || false))
+
+      unless @options[:use_oauth]
+        access_request = build_access_request
+        request = save_request(access_request + void_request)
+      else
+        request = save_request(void_request)
+      end
+
+      response = commit(:void, request, (options[:test] || false))
       parse_void_response(response, options)
+
     end
 
     def maximum_address_field_length
@@ -1026,8 +1068,17 @@ module ActiveShipping
     end
     
     def commit(action, request, test = false)
-      response = ssl_post("#{test ? TEST_URL : LIVE_URL}/#{RESOURCES[action]}", request, {'Authorization' => "Bearer #{@options[:access_token]}"} )
+
+      headers = {}
+      action = RESOURCES[action]
+      if @options[:use_oauth]
+        action = "api/#{action}"
+        headers = {'Authorization' => "Bearer #{@options[:access_token]}"}
+      end
+
+      response = ssl_post("#{test ? TEST_URL : LIVE_URL}/#{ action }", request,  headers)
       response.encode('utf-8', 'iso-8859-1')
+
     end
 
     def within_same_area?(origin, location)
