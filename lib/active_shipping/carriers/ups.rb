@@ -224,9 +224,16 @@ module ActiveShipping
 
       # STEP 2: Accept. Use shipment digest in first response to get the actual label.
       accept_request = build_accept_request(digest, options)
+      unless @options[:use_oauth2]
+        access_request = build_access_request
+        request = save_request(access_request + accept_request)
+      else
+        request = save_request(accept_request)
+      end
+
       logger.debug(accept_request) if logger
 
-      accept_response = commit(:ship_accept, save_request(accept_request), (options[:test] || false))
+      accept_response = commit(:ship_accept, request, (options[:test] || false))
       logger.debug(accept_response) if logger
 
       # ...finally, build a map from the response that contains
