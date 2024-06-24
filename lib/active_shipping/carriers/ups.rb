@@ -811,6 +811,21 @@ module ActiveShipping
               xml.MonetaryValue(package.options[:insured_value])
             end
           end
+
+
+          # xml.HazMat do
+          #   xml.RegulationSet(package.options[:regulation_set])
+          #   xml.ProperShippingName(package.options[:proper_shipping_name])
+          #   xml.TechnicalName(package.options[:])
+          #   xml.HazardClass(package.options[:])
+          #   xml.IDNumber(package.options[:])
+          #   xml.PackagingGroup(package.options[:])
+          #   xml.Quantity do
+          #     xml.QuantityValue(package.options[:])
+          #     xml.UnitOfMeasurement(code)
+          #   end
+          # end
+
         end
 
         # not implemented:  * Shipment/Package/LargePackageIndicator element
