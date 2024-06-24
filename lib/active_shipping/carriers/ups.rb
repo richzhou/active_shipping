@@ -146,7 +146,8 @@ module ActiveShipping
     }
 
     def requirements
-      [:access_token]
+      # [:access_token]
+      []
     end
 
     def find_rates(origin, destination, packages, options = {})
