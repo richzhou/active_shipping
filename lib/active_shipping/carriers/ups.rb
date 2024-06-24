@@ -156,7 +156,7 @@ module ActiveShipping
 
       rate_request = build_rate_request(origin, destination, packages, options)
 
-      unless @options[:use_oauth]
+      unless @options[:use_oauth2]
         access_request = build_access_request
         request = save_request(access_request + rate_request)
       else
@@ -182,7 +182,7 @@ module ActiveShipping
       options = @options.merge(options)
       tracking_request = build_tracking_request(tracking_number, options)
 
-      unless @options[:use_oauth]
+      unless @options[:use_oauth2]
         access_request = build_access_request
         request = save_request(access_request + tracking_request)
       else
@@ -202,7 +202,7 @@ module ActiveShipping
       confirm_request = build_shipment_request(origin, destination, packages, options)
       logger.debug(confirm_request) if logger
 
-      unless @options[:use_oauth]
+      unless @options[:use_oauth2]
         access_request = build_access_request
         request = save_request(access_request + confirm_request)
       else
@@ -240,7 +240,7 @@ module ActiveShipping
 
       dates_request = build_delivery_dates_request(origin, destination, packages, pickup_date, options)
 
-      unless @options[:use_oauth]
+      unless @options[:use_oauth2]
         access_request = build_access_request
         request = save_request(access_request + dates_request)
       else
@@ -257,7 +257,7 @@ module ActiveShipping
 
       void_request = build_void_request(tracking)
 
-      unless @options[:use_oauth]
+      unless @options[:use_oauth2]
         access_request = build_access_request
         request = save_request(access_request + void_request)
       else
@@ -1071,7 +1071,7 @@ module ActiveShipping
 
       headers = {}
       action = RESOURCES[action]
-      if @options[:use_oauth]
+      if @options[:use_oauth2]
         action = "api/#{action}"
         headers = {'Authorization' => "Bearer #{@options[:access_token]}"}
       end
