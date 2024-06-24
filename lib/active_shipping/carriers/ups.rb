@@ -811,6 +811,24 @@ module ActiveShipping
               xml.MonetaryValue(package.options[:insured_value])
             end
           end
+
+
+          xml.HazMat do
+            xml.PackageIdentifier("123456")
+            xml.HazMatChemicalRecord do
+              xml.ChemicalRecordIdentifier('test1234')
+              xml.ClassDivisionNumber('DS')
+              xml.IDNumber('UN')
+              xml.TransportationMode('01')
+              xml.RegulationSet('CFR')
+              xml.EmergencyPhone('+924236624589')
+              xml.PackagingType('blank')
+              xml.Quantity()
+              xml.UOM()
+              xml.ProperShippingName()
+            end          
+          end
+
         end
 
         # not implemented:  * Shipment/Package/LargePackageIndicator element
