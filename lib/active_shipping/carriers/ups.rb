@@ -732,6 +732,11 @@ module ActiveShipping
     end
 
     def build_package_node(xml, package, options = {})
+
+      code   = ''
+      weight = ''
+      value  = ''
+
       xml.Package do
         # not implemented:  * Shipment/Package/PackagingType element
 
@@ -754,7 +759,7 @@ module ActiveShipping
             xml.public_send(axis.to_s.capitalize, [value, 0.1].max)
           end
         end
-
+        
         xml.PackageWeight do
           if (options[:service] || options[:service_code]) == DEFAULT_SERVICE_NAME_TO_CODE["UPS SurePost (USPS) < 1lb"]
             # SurePost < 1lb uses OZS, not LBS
@@ -812,7 +817,6 @@ module ActiveShipping
             end
           end
 
-
           xml.HazMat do
             xml.PackageIdentifier("123456")
             xml.HazMatChemicalRecord do
@@ -823,9 +827,9 @@ module ActiveShipping
               xml.RegulationSet('CFR')
               xml.EmergencyPhone('+924236624589')
               xml.PackagingType('blank')
-              xml.Quantity()
-              xml.UOM()
-              xml.ProperShippingName()
+              xml.Quantity([value, 0.1].max)
+              xml.UOM(code)
+              xml.ProperShippingName('')
             end          
           end
 
