@@ -829,7 +829,7 @@ module ActiveShipping
               xml.PackagingType('blank')
               xml.Quantity([value, 0.1].max)
               xml.UOM(code)
-              xml.ProperShippingName('')
+              # xml.ProperShippingName('')
             end          
           end
 
