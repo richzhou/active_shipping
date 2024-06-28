@@ -350,7 +350,7 @@ module ActiveShipping
 
             Array(packages).each do |package|
               options[:imperial] ||= IMPERIAL_COUNTRIES.include?(origin.country_code(:alpha2))
-              build_package_node(xml, package, options)
+              build_package_node(xml, package, options, 'rates')
             end
 
             # not implemented:  * Shipment/ShipmentServiceOptions element
@@ -536,7 +536,7 @@ module ActiveShipping
 
             # A request may specify multiple packages.
             packages.each do |package|
-              build_package_node(xml, package, options)
+              build_package_node(xml, package, options, 'shipment')
             end
           end
 
@@ -731,7 +731,7 @@ module ActiveShipping
       end
     end
 
-    def build_package_node(xml, package, options = {})
+    def build_package_node(xml, package, options = {}, action)
 
       code   = ''
       weight = ''
@@ -817,20 +817,10 @@ module ActiveShipping
             end
           end
 
-          xml.HazMat do
-            xml.PackageIdentifier("123456")
-            xml.HazMatChemicalRecord do
-              xml.ChemicalRecordIdentifier('test1234')
-              xml.ClassDivisionNumber('DS')
-              xml.IDNumber('UN')
-              xml.TransportationMode('01')
-              xml.RegulationSet('CFR')
-              xml.EmergencyPhone('+924236624589')
-              xml.PackagingType('blank')
-              xml.Quantity([value, 0.1].max)
-              xml.UOM(code)
-              # xml.ProperShippingName('')
-            end          
+          if action == 'rates'
+            build_hazmat_rate_node(xml)
+          elsif action == 'shipment'
+            build_hazmat_shipment_node(xml)
           end
 
         end
@@ -839,6 +829,48 @@ module ActiveShipping
         #                   * Shipment/Package/AdditionalHandling element
       end
     end
+
+
+    def build_hazmat_shipment_node(xml)
+      xml.HazMat do
+        xml.PackageIdentifier("E-bike")
+        xml.HazMatChemicalRecord do
+          xml.ChemicalRecordIdentifier('8000')
+          xml.CommodityRegulatedLevelCode('FR')
+          xml.ClassDivisionNumber('9')
+          xml.IDNumber('UN3481')
+          xml.TransportationMode('02')
+          xml.Quantity('1')
+          xml.UOM('KGS')
+          xml.RegulationSet('49 CFR')
+          xml.EmergencyPhone('360-643-7964')
+          xml.EmergencyContact('Victor Sanrin')
+          xml.PackagingType('Fiberboard box')
+          xml.ProperShippingName('lithium ion batteries contained in equipment')
+        end
+      end
+    end
+
+    def build_hazmat_rate_node(xml)
+      xml.HazMat do
+        xml.PackageIdentifier("E-bike")
+        xml.HazMatChemicalRecord do
+          xml.ChemicalRecordIdentifier('8000')
+          xml.CommodityRegulatedLevelCode('FR')
+          xml.ClassDivisionNumber('9')
+          xml.IDNumber('UN3481')
+          xml.TransportationMode('02')
+          xml.Quantity('1')
+          xml.UOM('ounce')
+          xml.RegulationSet('CFR')
+          xml.EmergencyPhone('360-643-7964')
+          xml.EmergencyContact('Victor Sanrin')
+          xml.PackagingType('Fiberboard box')
+          xml.ProperShippingName('lithium ion batteries contained in equipment')
+        end
+      end
+    end
+
 
     def build_billing_info_node(xml, options={})
       if options[:bill_third_party]
