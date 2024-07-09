@@ -209,7 +209,7 @@ module ActiveShipping
       else
         request = save_request(confirm_request)
       end
-      
+
       confirm_response = commit(:ship_confirm, request, (options[:test] || false))
       logger.debug(confirm_response) if logger
 
@@ -405,6 +405,7 @@ module ActiveShipping
       xml_builder = Nokogiri::XML::Builder.new do |xml|
         xml.ShipmentConfirmRequest do
           xml.Request do
+            xml.SubVersion('1701')
             xml.RequestAction('ShipConfirm')
             # Required element cotnrols level of address validation.
             xml.RequestOption(options[:optional_processing] || 'validate')
@@ -463,7 +464,7 @@ module ActiveShipping
                     end
                   end
                 end
-              end              
+              end
             elsif options[:bill_third_party]
               xml.PaymentInformation do
                 xml.BillThirdParty do
@@ -832,22 +833,20 @@ module ActiveShipping
 
 
     def build_hazmat_shipment_node(xml)
+      xml.PackageIdentifier("E-bike")
       xml.HazMat do
-        xml.PackageIdentifier("E-bike")
-        xml.HazMatChemicalRecord do
-          xml.ChemicalRecordIdentifier('8000')
-          xml.CommodityRegulatedLevelCode('FR')
-          xml.ClassDivisionNumber('9')
-          xml.IDNumber('UN3481')
-          xml.TransportationMode('02')
-          xml.Quantity('1')
-          xml.UOM('KGS')
-          xml.RegulationSet('49 CFR')
-          xml.EmergencyPhone('360-643-7964')
-          xml.EmergencyContact('Victor Sanrin')
-          xml.PackagingType('Fiberboard box')
-          xml.ProperShippingName('lithium ion batteries contained in equipment')
-        end
+        xml.RegulationSet('CFR')
+        xml.ChemicalRecordIdentifier('8000')
+        xml.CommodityRegulatedLevelCode('FR')
+        xml.ClassDivisionNumber('9')
+        xml.IDNumber('UN3481')
+        xml.TransportationMode('Ground')
+        xml.Quantity('1')
+        xml.UOM('KGS')
+        xml.EmergencyPhone('360-643-7964')
+        xml.EmergencyContact('Victor Sanrin')
+        xml.PackagingType('Fiberboard box')
+        xml.ProperShippingName('lithium ion batteries contained in equipment')
       end
     end
 
@@ -859,9 +858,9 @@ module ActiveShipping
           xml.CommodityRegulatedLevelCode('FR')
           xml.ClassDivisionNumber('9')
           xml.IDNumber('UN3481')
-          xml.TransportationMode('02')
+          xml.TransportationMode('Ground')
           xml.Quantity('1')
-          xml.UOM('ounce')
+          xml.UOM('KGS')
           xml.RegulationSet('CFR')
           xml.EmergencyPhone('360-643-7964')
           xml.EmergencyContact('Victor Sanrin')
@@ -1103,6 +1102,13 @@ module ActiveShipping
     def response_message(document)
       status = document.root.at_xpath('Response/ResponseStatusDescription').try(:text)
       desc = document.root.at_xpath('Response/Error/ErrorDescription').try(:text)
+
+      error_code = document.root.at_xpath('Response/Error/ErrorCode').try(:text)
+      if error_code.present?
+        desc = "#{error_code} #{desc}"
+      end
+
+
       [status, desc].select(&:present?).join(": ").presence || "UPS could not process the request."
     end
 
