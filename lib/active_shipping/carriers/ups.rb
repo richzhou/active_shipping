@@ -818,10 +818,13 @@ module ActiveShipping
             end
           end
 
-          if action == 'rates'
-            build_hazmat_rate_node(xml)
-          elsif action == 'shipment'
-            build_hazmat_shipment_node(xml)
+          if package.dangerous_goods
+            dangerous_goods = package.dangerous_good['dangerous_good'].transform_keys(&:to_sym)
+            if action == 'rates'
+              build_hazmat_rate_node(xml, dangerous_goods)
+            elsif action == 'shipment'
+              build_hazmat_shipment_node(xml, dangerous_goods)
+            end
           end
 
         end
@@ -832,40 +835,40 @@ module ActiveShipping
     end
 
 
-    def build_hazmat_shipment_node(xml)
-      xml.PackageIdentifier("E-bike")
+    def build_hazmat_shipment_node(xml, dangerous_goods)
+      xml.PackageIdentifier(dangerous_goods[:reference_number])
       xml.HazMat do
-        xml.RegulationSet('CFR')
-        xml.ChemicalRecordIdentifier('8000')
-        xml.CommodityRegulatedLevelCode('FR')
-        xml.ClassDivisionNumber('9')
-        xml.IDNumber('UN3481')
-        xml.TransportationMode('Ground')
+        xml.RegulationSet(dangerous_goods[:regulation_set])
+        # xml.ChemicalRecordIdentifier('8000')
+        # xml.CommodityRegulatedLevelCode('FR')
+        xml.ClassDivisionNumber(dangerous_goods[:class_division_number])
+        xml.IDNumber(dangerous_goods[:identification_number])
+        xml.TransportationMode(dangerous_goods[:transportation_mode])
         xml.Quantity('1')
         xml.UOM('KGS')
-        xml.EmergencyPhone('360-643-7964')
-        xml.EmergencyContact('Victor Sanrin')
-        xml.PackagingType('Fiberboard box')
-        xml.ProperShippingName('lithium ion batteries contained in equipment')
+        xml.EmergencyPhone(dangerous_goods[:emergency_phone])
+        xml.EmergencyContact(dangerous_goods[:er_registrant])
+        xml.PackagingType(dangerous_goods[:packaging_type])
+        xml.ProperShippingName(dangerous_goods[:proper_shipping_name])
       end
     end
 
-    def build_hazmat_rate_node(xml)
+    def build_hazmat_rate_node(xml, dangerous_goods)
       xml.HazMat do
-        xml.PackageIdentifier("E-bike")
+        xml.PackageIdentifier(dangerous_goods[:reference_number])
         xml.HazMatChemicalRecord do
-          xml.ChemicalRecordIdentifier('8000')
-          xml.CommodityRegulatedLevelCode('FR')
-          xml.ClassDivisionNumber('9')
-          xml.IDNumber('UN3481')
-          xml.TransportationMode('Ground')
+          xml.RegulationSet(dangerous_goods[:regulation_set])
+          # xml.ChemicalRecordIdentifier('8000')
+          # xml.CommodityRegulatedLevelCode('FR')
+          xml.ClassDivisionNumber(dangerous_goods[:class_division_number])
+          xml.IDNumber(dangerous_goods[:identification_number])
+          xml.TransportationMode(dangerous_goods[:transportation_mode])
           xml.Quantity('1')
           xml.UOM('KGS')
-          xml.RegulationSet('CFR')
-          xml.EmergencyPhone('360-643-7964')
-          xml.EmergencyContact('Victor Sanrin')
-          xml.PackagingType('Fiberboard box')
-          xml.ProperShippingName('lithium ion batteries contained in equipment')
+          xml.EmergencyPhone(dangerous_goods[:emergency_phone])
+          xml.EmergencyContact(dangerous_goods[:er_registrant])
+          xml.PackagingType(dangerous_goods[:packaging_type])
+          xml.ProperShippingName(dangerous_goods[:proper_shipping_name])
         end
       end
     end
