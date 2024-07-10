@@ -818,8 +818,8 @@ module ActiveShipping
             end
           end
 
-          if package.dangerous_goods
-            dangerous_goods = package.dangerous_good['dangerous_good'].transform_keys(&:to_sym)
+          if package.options[:dangerous_goods]
+            dangerous_goods = package.options[:dangerous_good]['dangerous_good'].transform_keys(&:to_sym)
             if action == 'rates'
               build_hazmat_rate_node(xml, dangerous_goods)
             elsif action == 'shipment'
