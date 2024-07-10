@@ -405,7 +405,7 @@ module ActiveShipping
       xml_builder = Nokogiri::XML::Builder.new do |xml|
         xml.ShipmentConfirmRequest do
           xml.Request do
-            xml.SubVersion('1701')
+            # xml.SubVersion('1701')
             xml.RequestAction('ShipConfirm')
             # Required element cotnrols level of address validation.
             xml.RequestOption(options[:optional_processing] || 'validate')
