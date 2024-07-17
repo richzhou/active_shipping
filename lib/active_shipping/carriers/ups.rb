@@ -156,7 +156,7 @@ module ActiveShipping
       packages = Array(packages)
 
       rate_request = build_rate_request(origin, destination, packages, options)
-      Rails.logger.info "rate_request is #{rate_request.inspect}"
+      options[:logger].debug(rate_request) if options[:logger]
 
       unless @options[:use_oauth2]
         access_request = build_access_request
@@ -167,7 +167,7 @@ module ActiveShipping
 
       response = commit(:rates, request, options[:test])
       
-      Rails.logger.info "response is #{response.inspect}"
+      options[:logger].debug(response) if options[:logger]
       
       parse_rate_response(origin, destination, packages, response, options)
 
