@@ -202,6 +202,8 @@ module ActiveShipping
       # STEP 1: Confirm.  Validation step, important for verifying price.
       confirm_request = build_shipment_request(origin, destination, packages, options)
       logger.debug(confirm_request) if logger
+      
+      puts "confirm_request is #{confirm_request.inspect}"
 
       unless @options[:use_oauth2]
         access_request = build_access_request
