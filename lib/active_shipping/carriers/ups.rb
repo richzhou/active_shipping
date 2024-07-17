@@ -203,7 +203,7 @@ module ActiveShipping
       confirm_request = build_shipment_request(origin, destination, packages, options)
       logger.debug(confirm_request) if logger
       
-      puts "confirm_request is #{confirm_request.inspect}"
+      Rails.logger.info "confirm_request is #{confirm_request.inspect}"
 
       unless @options[:use_oauth2]
         access_request = build_access_request
@@ -214,6 +214,7 @@ module ActiveShipping
 
       confirm_response = commit(:ship_confirm, request, (options[:test] || false))
       logger.debug(confirm_response) if logger
+      Rails.logger.info "confirm_response is #{confirm_response.inspect}"
 
       # ... now, get the digest, it's needed to get the label.  In theory,
       # one could make decisions based on the price or some such to avoid
