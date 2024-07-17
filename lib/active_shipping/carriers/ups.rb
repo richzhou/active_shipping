@@ -205,10 +205,8 @@ module ActiveShipping
 
       # STEP 1: Confirm.  Validation step, important for verifying price.
       confirm_request = build_shipment_request(origin, destination, packages, options)
-      logger.debug(confirm_request) if logger
-      
-      Rails.logger.info "confirm_request is #{confirm_request.inspect}"
-
+      options[:logger].info(confirm_request) if options[:logger]
+  
       unless @options[:use_oauth2]
         access_request = build_access_request
         request = save_request(access_request + confirm_request)
@@ -217,9 +215,8 @@ module ActiveShipping
       end
 
       confirm_response = commit(:ship_confirm, request, (options[:test] || false))
-      logger.debug(confirm_response) if logger
-      Rails.logger.info "confirm_response is #{confirm_response.inspect}"
-
+      options[:logger].info(confirm_response) if options[:logger]
+      
       # ... now, get the digest, it's needed to get the label.  In theory,
       # one could make decisions based on the price or some such to avoid
       # surprises.  This also has *no* error handling yet.
@@ -238,10 +235,10 @@ module ActiveShipping
         request = save_request(accept_request)
       end
 
-      logger.debug(accept_request) if logger
+      options[:logger].debug(accept_request) if options[:logger]
 
       accept_response = commit(:ship_accept, request, (options[:test] || false))
-      logger.debug(accept_response) if logger
+      options[:logger].debug(accept_response) if options[:logger]
 
       # ...finally, build a map from the response that contains
       # the label data and tracking information.
