@@ -510,7 +510,7 @@ module ActiveShipping
               if origin.country_code(:alpha2) == 'US' && ['CA', 'PR'].include?(destination.country_code(:alpha2))
                 # Required for shipments from the US to Puerto Rico or Canada
                 xml.InvoiceLineTotal do
-                  total_value = packages.inject(0) {|sum, package| sum + (package.value || 0)}
+                  total_value = packages.inject(0) {|sum, package| sum + (package.options[:value] || 0)}
                   xml.MonetaryValue(total_value)
                 end
               end
@@ -598,7 +598,7 @@ module ActiveShipping
 
           xml.InvoiceLineTotal do
             xml.CurrencyCode(options[:currency_code] || 'USD')
-            total_value = packages.inject(0) {|sum, package| sum + package.value}
+            total_value = packages.inject(0) {|sum, package| sum + package.options[:value]}
             xml.MonetaryValue(total_value)
           end
 
@@ -639,7 +639,7 @@ module ActiveShipping
               xml.CommodityCode(package.options[:commodity_code])
               xml.OriginCountryCode(package.options[:country_of_manufacture])
               xml.Unit do |xml|
-                xml.Value(package.value / (package.options[:item_count] || 1))
+                xml.Value(package.options[:value] / (package.options[:item_count] || 1))
                 xml.Number((package.options[:item_count] || 1))
                 xml.UnitOfMeasurement do |xml|
                   # NMB = number. You can specify units in barrels, boxes, etc. Codes are in the api docs.
@@ -1138,7 +1138,7 @@ module ActiveShipping
       packages = [packages] if Hash === packages
       labels = packages.map do |package|
         Label.new(package["TrackingNumber"], Base64.decode64(package["LabelImage"]["GraphicImage"]))
-      end      
+      end         
       LabelResponse.new(success, message, response_info, {labels: labels })
     end
     
