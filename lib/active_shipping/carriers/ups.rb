@@ -848,8 +848,8 @@ module ActiveShipping
         xml.ClassDivisionNumber(dangerous_goods[:class_division_number])
         xml.IDNumber(dangerous_goods[:identification_number])
         xml.TransportationMode(dangerous_goods[:transportation_mode])
-        xml.Quantity('1')
-        xml.UOM('KGS')
+        xml.Quantity(dangerous_goods[:quantity])
+        xml.UOM(dangerous_goods[:unit])
         xml.EmergencyPhone(dangerous_goods[:emergency_phone])
         xml.EmergencyContact(dangerous_goods[:er_registrant])
         xml.PackagingType(dangerous_goods[:packaging_type])
@@ -867,8 +867,8 @@ module ActiveShipping
           xml.ClassDivisionNumber(dangerous_goods[:class_division_number])
           xml.IDNumber(dangerous_goods[:identification_number])
           xml.TransportationMode(dangerous_goods[:transportation_mode])
-          xml.Quantity('1')
-          xml.UOM('KGS')
+          xml.Quantity(dangerous_goods[:quantity])
+          xml.UOM(dangerous_goods[:unit])
           xml.EmergencyPhone(dangerous_goods[:emergency_phone])
           xml.EmergencyContact(dangerous_goods[:er_registrant])
           xml.PackagingType(dangerous_goods[:packaging_type])
@@ -919,6 +919,13 @@ module ActiveShipping
           service_code = rated_shipment.at('Service/Code').text
           days_to_delivery = rated_shipment.at('GuaranteedDaysToDelivery').text.to_i
           days_to_delivery = nil if days_to_delivery == 0
+          
+          warnings = []
+          begin
+            warnings = rated_shipment.css('>RatedShipmentWarning').map {|e| e.text}
+          rescue
+          end
+          
           RateEstimate.new(origin, destination, @@name, service_name_for(origin, service_code),
               :total_price => rated_shipment.at('TotalCharges/MonetaryValue').text.to_f,
               :insurance_price => rated_shipment.at('ServiceOptionsCharges/MonetaryValue').text.to_f,
@@ -926,6 +933,7 @@ module ActiveShipping
               :service_code => service_code,
               :packages => packages,
               :delivery_range => [timestamp_from_business_day(days_to_delivery)],
+              :warnings => warnings.join(" ").to_s.strip,
               :negotiated_rate => rated_shipment.at('NegotiatedRates/NetSummaryCharges/GrandTotal/MonetaryValue').try(:text).to_f
           )
         end
