@@ -9,9 +9,9 @@ module ActiveShipping
     attr_reader :last_swsim_method
 
     # TODO: Update to latest API. Documentation for the latest WSDL version is available here: http://support.stamps.com/outgoing/swsimv39doc.zip
-    LIVE_URL = 'https://swsim.stamps.com/swsim/swsimv34.asmx'
-    TEST_URL = 'https://swsim.testing.stamps.com/swsim/swsimv34.asmx'
-    NAMESPACE = 'http://stamps.com/xml/namespace/2014/01/swsim/swsimv34'
+    LIVE_URL = 'https://swsim.stamps.com/swsim/swsimv135.asmx'
+    TEST_URL = 'https://swsim.testing.stamps.com/swsim/swsimv135.asmx'
+    NAMESPACE = 'http://stamps.com/xml/namespace/2023/07/swsim/SwsimV135' #'http://stamps.com/xml/namespace/2014/01/swsim/swsimv34'
 
     REQUIRED_OPTIONS = [:integration_id, :username, :password].freeze
 
@@ -47,7 +47,8 @@ module ActiveShipping
       'US-PMI' => 'USPS Priority Mail International',
       'US-FCI' => 'USPS First Class Mail International',
       'US-CM'  => 'USPS Critical Mail',
-      'US-PS'  => 'USPS Parcel Select'
+      'US-PS'  => 'USPS Parcel Select',
+      'US-GA'  => 'USPS Ground Advantage'
     }
 
     ADD_ONS = {
@@ -152,6 +153,7 @@ module ActiveShipping
       origin = standardize_address(origin)
       destination = standardize_address(destination)
       request = build_rate_request(origin, destination, package, options)
+      
       commit(:GetRates, request)
     end
 
@@ -226,7 +228,7 @@ module ActiveShipping
                  'xmlns:soap' => 'http://schemas.xmlsoap.org/soap/envelope/',
                  'xmlns:xsi'  => 'http://www.w3.org/2001/XMLSchema-instance',
                  'xmlns:xsd'  => 'http://www.w3.org/2001/XMLSchema',
-                 'xmlns:tns'  => 'http://stamps.com/xml/namespace/2014/01/swsim/swsimv34'
+                 'xmlns:tns'  => namespace
                 ) do
           xml['soap'].Body do
             yield(xml)
@@ -321,9 +323,10 @@ module ActiveShipping
       options[:declared_value] ||= value if international?(destination)
 
       xml['tns'].Rate do
-        xml['tns'].FromZIPCode(      origin.postal_code) unless origin.postal_code.blank?
-        xml['tns'].ToZIPCode(        destination.postal_code) unless destination.postal_code.blank?
-        xml['tns'].ToCountry(        destination.country_code) unless destination.country_code.blank?
+        
+        add_address(xml, origin, :From)        
+        add_address(xml, destination, :To)
+        
         xml['tns'].ServiceType(      options[:service]) unless options[:service].blank?
         xml['tns'].PrintLayout(      options[:print_layout]) unless options[:print_layout].blank?
         xml['tns'].WeightOz(         [package.ounces, 1].max)
@@ -358,19 +361,16 @@ module ActiveShipping
           end
         end
 
-        xml['tns'].ToState(destination.province) unless destination.province.blank?
       end
     end
 
     def build_create_indicium_request(origin, destination, package, line_items, options)
-      build_header do |xml|
+      req = build_header do |xml|
         xml['tns'].CreateIndicium do
           xml['tns'].Authenticator(            authenticator)
           xml['tns'].IntegratorTxID(           options[:integrator_tx_id] || SecureRandom::uuid)
 
           add_rate(xml, origin, destination, package, options)
-          add_address(xml, origin, :From)
-          add_address(xml, destination, :To)
           add_customs(xml, line_items, options) unless options[:content_type].blank?
 
           xml['tns'].SampleOnly(               options[:sample_only]) unless options[:sample_only].blank?
@@ -394,6 +394,7 @@ module ActiveShipping
           add_label_recipient_info(xml, options) unless options[:label_email_address].blank?
         end
       end
+      req
     end
 
     def add_shipment_notification(xml, options)
@@ -625,18 +626,22 @@ module ActiveShipping
     def parse_rate(rate)
       rate_options = {}
 
-      origin = Location.new(zip: rate.at('FromZIPCode').text)
+      origin = Location.new(zip: rate.at('From/ZIPCode').text)
 
       location_values = {}
-      location_values[:zip]     = parse_content(rate, 'ToZIPCode')
-      location_values[:country] = parse_content(rate, 'ToCountry')
+      location_values[:zip]     = parse_content(rate, 'To/ZIPCode')
+      location_values[:country] = parse_content(rate, 'To/Country')
       destination = Location.new(location_values)
 
       service_name = SERVICE_TYPES[rate.at('ServiceType').text]
+      if service_name.blank? #unmapped service, use carrier's description
+        service_name = SERVICE_TYPES[rate.at('ServiceDescription')].text
+      end
 
       rate_options[:service_code]  = rate.at('ServiceType').text
       rate_options[:currency]      = 'USD'
       rate_options[:shipping_date] = Date.parse(rate.at('ShipDate').text)
+      rate_options[:delivery_date] = Date.parse(rate.at('DeliveryDate').try(:text))
 
       if delivery_days = rate.at('DeliverDays')
         delivery_days = delivery_days.text.split('-')
@@ -654,7 +659,7 @@ module ActiveShipping
       elsif add_ons['US-A-INS'] && add_ons['US-A-INS'][:amount]
         rate_options[:insurance_price] = add_ons['US-A-INS'][:amount]
       end
-
+      
       StampsRateEstimate.new(origin, destination, @@name, service_name, rate_options)
     end
 
