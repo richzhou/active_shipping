@@ -635,7 +635,7 @@ module ActiveShipping
 
       service_name = SERVICE_TYPES[rate.at('ServiceType').text]
       if service_name.blank? #unmapped service, use carrier's description
-        service_name = SERVICE_TYPES[rate.at('ServiceDescription')].text
+        service_name = rate.at('ServiceDescription').try(:text)
       end
 
       rate_options[:service_code]  = rate.at('ServiceType').text
