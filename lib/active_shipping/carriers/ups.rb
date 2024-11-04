@@ -3,6 +3,7 @@
 module ActiveShipping
   class UPS < Carrier
     self.retry_safe = true
+    self.ssl_version = :TLSv1_2
 
     cattr_accessor :default_options
     cattr_reader :name
@@ -145,17 +146,31 @@ module ActiveShipping
     }
 
     def requirements
-      [:key, :login, :password]
+      # [:access_token]
+      []
     end
 
     def find_rates(origin, destination, packages, options = {})
       origin, destination = upsified_location(origin), upsified_location(destination)
       options = @options.merge(options)
       packages = Array(packages)
-      access_request = build_access_request
+
       rate_request = build_rate_request(origin, destination, packages, options)
-      response = commit(:rates, save_request(access_request + rate_request), options[:test])
+      options[:logger].info(rate_request) if options[:logger]
+
+      unless @options[:use_oauth2]
+        access_request = build_access_request
+        request = save_request(access_request + rate_request)
+      else
+        request = save_request(rate_request)
+      end
+
+      response = commit(:rates, request, options[:test])
+      
+      options[:logger].info(response) if options[:logger]
+      
       parse_rate_response(origin, destination, packages, response, options)
+
     end
 
     # Retrieves tracking information for a previous shipment
@@ -168,40 +183,62 @@ module ActiveShipping
     # @return [ActiveShipping::TrackingResponse] The response from the carrier. This
     #   response should a list of shipment tracking events if successful.
     def find_tracking_info(tracking_number, options = {})
+
       options = @options.merge(options)
-      access_request = build_access_request
       tracking_request = build_tracking_request(tracking_number, options)
-      response = commit(:track, save_request(access_request + tracking_request), options[:test])
+
+      unless @options[:use_oauth2]
+        access_request = build_access_request
+        request = save_request(access_request + tracking_request)
+      else
+        request = save_request(tracking_request)
+      end
+
+      response = commit(:track, request, options[:test])
       parse_tracking_response(response, options)
+
     end
 
     def create_shipment(origin, destination, packages, options = {})      
       options = @options.merge(options)
       packages = Array(packages)
-      access_request = build_access_request
 
       # STEP 1: Confirm.  Validation step, important for verifying price.
       confirm_request = build_shipment_request(origin, destination, packages, options)
-      logger.debug(confirm_request) if logger
-      
-      confirm_response = commit(:ship_confirm, save_request(access_request + confirm_request), (options[:test] || false))
-      logger.debug(confirm_response) if logger
+      options[:logger].info(confirm_request) if options[:logger]
+  
+      unless @options[:use_oauth2]
+        access_request = build_access_request
+        request = save_request(access_request + confirm_request)
+      else
+        request = save_request(confirm_request)
+      end
 
+      confirm_response = commit(:ship_confirm, request, (options[:test] || false))
+      options[:logger].info(confirm_response) if options[:logger]
+      
       # ... now, get the digest, it's needed to get the label.  In theory,
       # one could make decisions based on the price or some such to avoid
       # surprises.  This also has *no* error handling yet.
       xml = parse_ship_confirm(confirm_response)
       success = response_success?(xml)
       message = response_message(xml)
-      raise message unless success
+      raise ActiveShipping::ResponseContentError, StandardError.new(message) unless success
       digest  = response_digest(xml)
 
       # STEP 2: Accept. Use shipment digest in first response to get the actual label.
       accept_request = build_accept_request(digest, options)
-      logger.debug(accept_request) if logger
+      unless @options[:use_oauth2]
+        access_request = build_access_request
+        request = save_request(access_request + accept_request)
+      else
+        request = save_request(accept_request)
+      end
 
-      accept_response = commit(:ship_accept, save_request(access_request + accept_request), (options[:test] || false))
-      logger.debug(accept_response) if logger
+      options[:logger].debug(accept_request) if options[:logger]
+
+      accept_response = commit(:ship_accept, request, (options[:test] || false))
+      options[:logger].debug(accept_response) if options[:logger]
 
       # ...finally, build a map from the response that contains
       # the label data and tracking information.
@@ -212,18 +249,36 @@ module ActiveShipping
       origin, destination = upsified_location(origin), upsified_location(destination)
       options = @options.merge(options)
       packages = Array(packages)
-      access_request = build_access_request
+
       dates_request = build_delivery_dates_request(origin, destination, packages, pickup_date, options)
-      response = commit(:delivery_dates, save_request(access_request + dates_request), (options[:test] || false))
+
+      unless @options[:use_oauth2]
+        access_request = build_access_request
+        request = save_request(access_request + dates_request)
+      else
+        request = save_request(dates_request)
+      end
+
+      response = commit(:delivery_dates, request, (options[:test] || false))
       parse_delivery_dates_response(origin, destination, packages, response, options)
+
     end
 
     def void_shipment(tracking, options={})
       options = @options.merge(options)
-      access_request = build_access_request
+
       void_request = build_void_request(tracking)
-      response = commit(:void, save_request(access_request + void_request), (options[:test] || false))
+
+      unless @options[:use_oauth2]
+        access_request = build_access_request
+        request = save_request(access_request + void_request)
+      else
+        request = save_request(void_request)
+      end
+
+      response = commit(:void, request, (options[:test] || false))
       parse_void_response(response, options)
+
     end
 
     def maximum_address_field_length
@@ -299,7 +354,7 @@ module ActiveShipping
 
             Array(packages).each do |package|
               options[:imperial] ||= IMPERIAL_COUNTRIES.include?(origin.country_code(:alpha2))
-              build_package_node(xml, package, options)
+              build_package_node(xml, package, options, 'rates')
             end
 
             # not implemented:  * Shipment/ShipmentServiceOptions element
@@ -317,7 +372,7 @@ module ActiveShipping
     # Build XML node to request a shipping label for the given packages.
     #
     # options:
-    # * origin_account: who will pay for the shipping label
+    # * origin_account: account number for the shipper
     # * customer_context: a "guid like substance" -- according to UPS
     # * shipper: who is sending the package and where it should be returned
     #     if it is undeliverable.
@@ -331,6 +386,7 @@ module ActiveShipping
     # * prepay: if truthy the shipper will be bill immediatly. Otherwise the shipper is billed when the label is used.
     # * negotiated_rates: if truthy negotiated rates will be requested from ups. Only valid if shipper account has negotiated rates.
     # * delivery_confirmation: Can be set to any key from SHIPMENT_DELIVERY_CONFIRMATION_CODES. Can also be set on package level via package.options
+    # * bill_third_party: When truthy, bill an account other than the shipper's. Specified by billing_(account, zip and country)
     def build_shipment_request(origin, destination, packages, options={})
       packages = Array(packages)
       shipper = options[:shipper] || origin
@@ -353,6 +409,7 @@ module ActiveShipping
       xml_builder = Nokogiri::XML::Builder.new do |xml|
         xml.ShipmentConfirmRequest do
           xml.Request do
+            # xml.SubVersion('1701')
             xml.RequestAction('ShipConfirm')
             # Required element cotnrols level of address validation.
             xml.RequestOption(options[:optional_processing] || 'validate')
@@ -380,7 +437,7 @@ module ActiveShipping
               end
             end
 
-            if options[:origin_account]
+            if options[:negotiated_rates]
               xml.RateInformation do
                 xml.NegotiatedRatesIndicator
               end
@@ -411,7 +468,7 @@ module ActiveShipping
                     end
                   end
                 end
-              end              
+              end
             elsif options[:bill_third_party]
               xml.PaymentInformation do
                 xml.BillThirdParty do
@@ -432,18 +489,14 @@ module ActiveShipping
                   # Type '01' means 'Transportation'
                   # This node specifies who will be billed for transportation.
                   xml.Type('01')
-                  xml.BillShipper do
-                    xml.AccountNumber(options[:origin_account])
-                  end
+                  build_billing_info_node(xml, options)
                 end
-                if options[:terms_of_shipment] == 'DDP'
+                if options[:terms_of_shipment] == 'DDP' && options[:international]
                   # DDP stands for delivery duty paid and means the shipper will cover duties and taxes
                   # Otherwise UPS will charge the receiver
                   xml.ShipmentCharge do
                     xml.Type('02') # Type '02' means 'Duties and Taxes'
-                    xml.BillShipper do
-                      xml.AccountNumber(options[:origin_account])
-                    end
+                    build_billing_info_node(xml, options.merge(bill_to_consignee: true))
                   end
                 end
               end
@@ -457,7 +510,7 @@ module ActiveShipping
               if origin.country_code(:alpha2) == 'US' && ['CA', 'PR'].include?(destination.country_code(:alpha2))
                 # Required for shipments from the US to Puerto Rico or Canada
                 xml.InvoiceLineTotal do
-                  total_value = packages.inject(0) {|sum, package| sum + (package.value || 0)}
+                  total_value = packages.inject(0) {|sum, package| sum + (package.options[:value] || 0)}
                   xml.MonetaryValue(total_value)
                 end
               end
@@ -488,7 +541,7 @@ module ActiveShipping
 
             # A request may specify multiple packages.
             packages.each do |package|
-              build_package_node(xml, package, options)
+              build_package_node(xml, package, options, 'shipment')
             end
           end
 
@@ -545,7 +598,7 @@ module ActiveShipping
 
           xml.InvoiceLineTotal do
             xml.CurrencyCode(options[:currency_code] || 'USD')
-            total_value = packages.inject(0) {|sum, package| sum + package.value}
+            total_value = packages.inject(0) {|sum, package| sum + package.options[:value]}
             xml.MonetaryValue(total_value)
           end
 
@@ -586,7 +639,7 @@ module ActiveShipping
               xml.CommodityCode(package.options[:commodity_code])
               xml.OriginCountryCode(package.options[:country_of_manufacture])
               xml.Unit do |xml|
-                xml.Value(package.value / (package.options[:item_count] || 1))
+                xml.Value(package.options[:value] / (package.options[:item_count] || 1))
                 xml.Number((package.options[:item_count] || 1))
                 xml.UnitOfMeasurement do |xml|
                   # NMB = number. You can specify units in barrels, boxes, etc. Codes are in the api docs.
@@ -683,7 +736,12 @@ module ActiveShipping
       end
     end
 
-    def build_package_node(xml, package, options = {})
+    def build_package_node(xml, package, options = {}, action)
+
+      code   = ''
+      weight = ''
+      value  = ''
+
       xml.Package do
         # not implemented:  * Shipment/Package/PackagingType element
 
@@ -706,7 +764,7 @@ module ActiveShipping
             xml.public_send(axis.to_s.capitalize, [value, 0.1].max)
           end
         end
-
+        
         xml.PackageWeight do
           if (options[:service] || options[:service_code]) == DEFAULT_SERVICE_NAME_TO_CODE["UPS SurePost (USPS) < 1lb"]
             # SurePost < 1lb uses OZS, not LBS
@@ -763,10 +821,81 @@ module ActiveShipping
               xml.MonetaryValue(package.options[:insured_value])
             end
           end
+
+          if package.options[:dangerous_goods]
+            dangerous_goods = package.options[:dangerous_good]['dangerous_good'].transform_keys(&:to_sym)
+            if action == 'rates'
+              build_hazmat_rate_node(xml, dangerous_goods)
+            elsif action == 'shipment'
+              build_hazmat_shipment_node(xml, dangerous_goods)
+            end
+          end
+
         end
 
         # not implemented:  * Shipment/Package/LargePackageIndicator element
         #                   * Shipment/Package/AdditionalHandling element
+      end
+    end
+
+
+    def build_hazmat_shipment_node(xml, dangerous_goods)
+      xml.PackageIdentifier(dangerous_goods[:reference_number])
+      xml.HazMat do
+        xml.RegulationSet(dangerous_goods[:regulation_set])
+        # xml.ChemicalRecordIdentifier('8000')
+        # xml.CommodityRegulatedLevelCode('FR')
+        xml.ClassDivisionNumber(dangerous_goods[:class_division_number])
+        xml.IDNumber(dangerous_goods[:identification_number])
+        xml.TransportationMode(dangerous_goods[:transportation_mode])
+        xml.Quantity(dangerous_goods[:quantity])
+        xml.UOM(dangerous_goods[:uom])
+        xml.EmergencyPhone(dangerous_goods[:emergency_phone])
+        xml.EmergencyContact(dangerous_goods[:er_registrant])
+        xml.PackagingType(dangerous_goods[:packaging_type])
+        xml.ProperShippingName(dangerous_goods[:proper_shipping_name])
+      end
+    end
+
+    def build_hazmat_rate_node(xml, dangerous_goods)
+      xml.HazMat do
+        xml.PackageIdentifier(dangerous_goods[:reference_number])
+        xml.HazMatChemicalRecord do
+          xml.RegulationSet(dangerous_goods[:regulation_set])
+          # xml.ChemicalRecordIdentifier('8000')
+          # xml.CommodityRegulatedLevelCode('FR')
+          xml.ClassDivisionNumber(dangerous_goods[:class_division_number])
+          xml.IDNumber(dangerous_goods[:identification_number])
+          xml.TransportationMode(dangerous_goods[:transportation_mode])
+          xml.Quantity(dangerous_goods[:quantity])
+          xml.UOM(dangerous_goods[:uom])
+          xml.EmergencyPhone(dangerous_goods[:emergency_phone])
+          xml.EmergencyContact(dangerous_goods[:er_registrant])
+          xml.PackagingType(dangerous_goods[:packaging_type])
+          xml.ProperShippingName(dangerous_goods[:proper_shipping_name])
+        end
+      end
+    end
+
+
+    def build_billing_info_node(xml, options={})
+      if options[:bill_third_party]
+        xml.BillThirdParty do
+          node_type = options[:bill_to_consignee] ? :BillThirdPartyConsignee : :BillThirdPartyShipper
+          xml.public_send(node_type) do
+            xml.AccountNumber(options[:billing_account])
+            xml.ThirdParty do
+              xml.Address do
+                xml.PostalCode(options[:billing_zip])
+                xml.CountryCode(options[:billing_country])
+              end
+            end
+          end
+        end
+      else
+        xml.BillShipper do
+          xml.AccountNumber(options[:origin_account])
+        end
       end
     end
 
@@ -790,6 +919,13 @@ module ActiveShipping
           service_code = rated_shipment.at('Service/Code').text
           days_to_delivery = rated_shipment.at('GuaranteedDaysToDelivery').text.to_i
           days_to_delivery = nil if days_to_delivery == 0
+          
+          warnings = []
+          begin
+            warnings = rated_shipment.css('>RatedShipmentWarning').map {|e| e.text}
+          rescue
+          end
+          
           RateEstimate.new(origin, destination, @@name, service_name_for(origin, service_code),
               :total_price => rated_shipment.at('TotalCharges/MonetaryValue').text.to_f,
               :insurance_price => rated_shipment.at('ServiceOptionsCharges/MonetaryValue').text.to_f,
@@ -797,6 +933,7 @@ module ActiveShipping
               :service_code => service_code,
               :packages => packages,
               :delivery_range => [timestamp_from_business_day(days_to_delivery)],
+              :warnings => warnings.join(" ").to_s.strip,
               :negotiated_rate => rated_shipment.at('NegotiatedRates/NetSummaryCharges/GrandTotal/MonetaryValue').try(:text).to_f
           )
         end
@@ -854,11 +991,11 @@ module ActiveShipping
         activities = first_package.css('> Activity')
         unless activities.empty?
           shipment_events = activities.map do |activity|
-            description = activity.at('Status/StatusType/Description').text
-            type_code = activity.at('Status/StatusType/Code').text
+            description = activity.at('Status/StatusType/Description').try(:text)
+            type_code = activity.at('Status/StatusType/Code').try(:text)
             zoneless_time = parse_ups_datetime(:time => activity.at('Time'), :date => activity.at('Date'))
             location = location_from_address_node(activity.at('ActivityLocation/Address'))
-            ShipmentEvent.new(description, zoneless_time, location, nil, type_code)
+            ShipmentEvent.new(description, zoneless_time, location, description, type_code)
           end
 
           shipment_events = shipment_events.sort_by(&:time)
@@ -980,6 +1117,13 @@ module ActiveShipping
     def response_message(document)
       status = document.root.at_xpath('Response/ResponseStatusDescription').try(:text)
       desc = document.root.at_xpath('Response/Error/ErrorDescription').try(:text)
+
+      error_code = document.root.at_xpath('Response/Error/ErrorCode').try(:text)
+      if error_code.present?
+        desc = "#{error_code} #{desc}"
+      end
+
+
       [status, desc].select(&:present?).join(": ").presence || "UPS could not process the request."
     end
 
@@ -1002,12 +1146,22 @@ module ActiveShipping
       packages = [packages] if Hash === packages
       labels = packages.map do |package|
         Label.new(package["TrackingNumber"], Base64.decode64(package["LabelImage"]["GraphicImage"]))
-      end      
+      end         
       LabelResponse.new(success, message, response_info, {labels: labels })
     end
     
     def commit(action, request, test = false)
-      ssl_post("#{test ? TEST_URL : LIVE_URL}/#{RESOURCES[action]}", request)
+
+      headers = {}
+      action = RESOURCES[action]
+      if @options[:use_oauth2]
+        action = "api/#{action}"
+        headers = {'Authorization' => "Bearer #{@options[:access_token]}"}
+      end
+
+      response = ssl_post("#{test ? TEST_URL : LIVE_URL}/#{ action }", request,  headers)
+      response.encode('utf-8', 'iso-8859-1')
+
     end
 
     def within_same_area?(origin, location)

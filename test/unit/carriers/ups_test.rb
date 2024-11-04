@@ -128,6 +128,19 @@ class UPSTest < Minitest::Test
                   "DELIVERED"], response.shipment_events.map(&:name)
   end
 
+  def test_find_tracking_info_should_have_messages_for_shipment_events
+    @carrier.expects(:commit).returns(@tracking_response)
+    response = @carrier.find_tracking_info('1Z5FX0076803466397')
+    assert_equal ["BILLING INFORMATION RECEIVED",
+                  "IMPORT SCAN",
+                  "LOCATION SCAN",
+                  "LOCATION SCAN",
+                  "DEPARTURE SCAN",
+                  "ARRIVAL SCAN",
+                  "OUT FOR DELIVERY",
+                  "DELIVERED"], response.shipment_events.map(&:message)
+  end
+
   def test_find_tracking_info_should_have_correct_type_codes_for_shipment_events
     @carrier.expects(:commit).returns(@tracking_response)
     response = @carrier.find_tracking_info('1Z5FX0076803466397')
@@ -164,6 +177,13 @@ class UPSTest < Minitest::Test
     end
 
     assert_equal "Failure: Package exceeds the maximum length constraint of 108 inches. Length is the longest side of a package.", e.message
+  end
+
+  def test_response_parsing_an_undecoded_character
+    unencoded_response = @tracking_response.gsub('NAPERVILLE', "N\xc4PERVILLE")
+    @carrier.stubs(:ssl_post).returns(unencoded_response)
+    response = @carrier.find_tracking_info('1Z5FX0076803466397')
+    assert_equal 'NÄPERVILLE', response.shipment_events.first.location.city
   end
 
   def test_response_parsing_an_unknown_error
@@ -229,17 +249,18 @@ class UPSTest < Minitest::Test
   def test_delivery_range_takes_weekend_into_consideration
     mock_response = xml_fixture('ups/test_real_home_as_residential_destination_response')
     @carrier.expects(:commit).returns(mock_response)
-    Timecop.freeze(DateTime.new(2012, 6, 15))
-    response = @carrier.find_rates( location_fixtures[:beverly_hills],
-                                    location_fixtures[:real_home_as_residential],
-                                    package_fixtures.values_at(:chocolate_stuff))
 
-    date_test = [nil, 3, 2, 1, 1, 1].map do |days|
-      DateTime.now.utc + days + 2 if days
+    Timecop.freeze(DateTime.new(2012, 6, 15)) do
+      response = @carrier.find_rates( location_fixtures[:beverly_hills],
+                                      location_fixtures[:real_home_as_residential],
+                                      package_fixtures.values_at(:chocolate_stuff))
+
+      date_test = [nil, 3, 2, 1, 1, 1].map do |days|
+        DateTime.now.utc + (days + 2).days if days
+      end
+
+      assert_equal date_test, response.rates.map(&:delivery_date)
     end
-    Timecop.return
-
-    assert_equal date_test, response.rates.map(&:delivery_date)
   end
 
   def test_maximum_weight
@@ -352,9 +373,9 @@ class UPSTest < Minitest::Test
                                            :billing_zip => expected_postal_code_number,
                                            :billing_country => expected_country_code)
 
-    assert_equal expected_account_number, response.search('ShipmentConfirmRequest/Shipment/PaymentInformation/BillThirdParty/BillThirdPartyShipper/AccountNumber').text
-    assert_equal expected_postal_code_number, response.search('/ShipmentConfirmRequest/Shipment/PaymentInformation/BillThirdParty/BillThirdPartyShipper/ThirdParty/Address/PostalCode').text
-    assert_equal expected_country_code, response.search('/ShipmentConfirmRequest/Shipment/PaymentInformation/BillThirdParty/BillThirdPartyShipper/ThirdParty/Address/CountryCode').text
+    assert_equal expected_account_number, response.search('ShipmentConfirmRequest/Shipment/ItemizedPaymentInformation/ShipmentCharge/BillThirdParty/BillThirdPartyShipper/AccountNumber').text
+    assert_equal expected_postal_code_number, response.search('/ShipmentConfirmRequest/Shipment/ItemizedPaymentInformation/ShipmentCharge/BillThirdParty/BillThirdPartyShipper/ThirdParty/Address/PostalCode').text
+    assert_equal expected_country_code, response.search('/ShipmentConfirmRequest/Shipment/ItemizedPaymentInformation/ShipmentCharge/BillThirdParty/BillThirdPartyShipper/ThirdParty/Address/CountryCode').text
   end
 
   def test_label_request_negotiated_rates_presence
@@ -364,7 +385,8 @@ class UPSTest < Minitest::Test
                                            package_fixtures.values_at(:chocolate_stuff),
                                            :test => true,
                                            :saturday_delivery => true,
-                                           :origin_account => 'A01B23' # without this option, a negotiated rate will not be requested
+                                           :origin_account => 'A01B23', # without this option, a negotiated rate will not be requested
+                                           :negotiated_rates => true,
                              )
 
     negotiated_rates = response.search '/ShipmentConfirmRequest/Shipment/RateInformation/NegotiatedRatesIndicator'
@@ -512,7 +534,7 @@ class UPSTest < Minitest::Test
     )
 
     response.delivery_estimates.each do |delivery_estimate|
-      assert delivery_estimate.service_name, UPS::DEFAULT_SERVICES[delivery_estimate.service_code]
+      assert_equal delivery_estimate.service_code, UPS::DEFAULT_SERVICE_NAME_TO_CODE[delivery_estimate.service_name]
     end
   end
 
