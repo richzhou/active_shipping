@@ -168,6 +168,12 @@ module ActiveShipping
       request = build_track_shipment_request(shipment_id, options)
       commit(:TrackShipment, request)
     end
+    
+    def reprint_label(tracking_number, options={})
+      request = build_reprint_indicium_request(tracking_number, options)
+      commit(:ReprintIndicium, request)
+    end
+    
 
     def namespace
       NAMESPACE
@@ -392,6 +398,22 @@ module ActiveShipping
           xml['tns'].PaperSize(                options[:paper_size]) unless options[:paper_size].blank?
 
           add_label_recipient_info(xml, options) unless options[:label_email_address].blank?
+        end
+      end
+      req
+    end
+    
+    
+    def build_reprint_indicium_request(tracking_number, options)
+      req = build_header do |xml|
+        xml['tns'].ReprintIndicium do
+          xml.indiciumRequest do        
+            xml.Authenticator(            authenticator)
+            xml.TrackingNumber(           tracking_number)
+            xml.RotationDegrees(          options[:rotation] || 0)
+            xml.StartRow(                   options[:start_row] || 0 ) 
+            xml.StartColumn(                options[:start_row] || 0) 
+          end
         end
       end
       req
@@ -750,6 +772,16 @@ module ActiveShipping
 
       TrackingResponse.new(true, '', {}, response_options)
     end
+    
+    def parse_reprint_indicium_response(indicium, response_options)      
+      indicium = indicium.at('ReprintIndiciumResult')
+      parse_authenticator(indicium)
+      response_options[:tracking_number]   = parse_content(indicium, 'TrackingNumber')      
+      response_options[:url]         = parse_content(indicium, 'Url')
+      response_options[:image_data]        = Base64.decode64(indicium.at('ImageData/base64Binary').text) if indicium.at('ImageData/base64Binary')
+      StampsReprintResponse.new(true, '', {}, response_options)
+    end
+    
 
     def parse_content(node, child)
       return unless node.at(child) && node.at(child).text != ''
@@ -862,4 +894,16 @@ module ActiveShipping
       @image_data ||= ssl_get(label_url)
     end
   end
+  
+  class StampsReprintResponse < Response
+    include ActiveUtils::PostsData
+
+    attr_reader  :url
+
+    def initialize(success, message, params = {}, options = {})
+      super
+      @url             = options[:url]
+    end
+  end
+  
 end
