@@ -647,12 +647,13 @@ module ActiveShipping
 
     def parse_rate(rate)
       rate_options = {}
-
-      origin = Location.new(zip: rate.at('From/ZIPCode').text)
+      
+      origin = Location.new(zip: rate.at('From/ZIPCode').try(:text))
 
       location_values = {}
       location_values[:zip]     = parse_content(rate, 'To/ZIPCode')
       location_values[:country] = parse_content(rate, 'To/Country')
+      
       destination = Location.new(location_values)
 
       service_name = SERVICE_TYPES[rate.at('ServiceType').text]
@@ -662,8 +663,10 @@ module ActiveShipping
 
       rate_options[:service_code]  = rate.at('ServiceType').text
       rate_options[:currency]      = 'USD'
-      rate_options[:shipping_date] = Date.parse(rate.at('ShipDate').text)
-      rate_options[:delivery_date] = Date.parse(rate.at('DeliveryDate').try(:text))
+      ship_date = rate.at('ShipDate').try(:text)
+      rate_options[:shipping_date] = Date.parse(ship_date) unless ship_date.blank?
+      deliver_date = rate.at('DeliveryDate').try(:text)
+      rate_options[:delivery_date] = Date.parse(deliver_date) unless deliver_date.blank?
 
       if delivery_days = rate.at('DeliverDays')
         delivery_days = delivery_days.text.split('-')
