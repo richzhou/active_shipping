@@ -182,6 +182,12 @@ module ActiveShipping
     def clear_authenticator
       @authenticator = nil
     end
+    
+
+    def void_shipment(tracking_number, options={})
+      request = build_cancel_indicium_request(tracking_number, options)
+      commit(:CancelIndicium, request)
+    end
 
     private
 
@@ -418,6 +424,22 @@ module ActiveShipping
       end
       req
     end
+    
+
+    def build_cancel_indicium_request(tracking_number, options)
+      puts "tracking_number is #{tracking_number}"
+      tracking_numbers = [tracking_number]
+      req = build_header do |xml|
+        xml['tns'].CancelIndicium do
+          xml['tns'].Authenticator(            authenticator)
+          xml['tns'].TrackingNumbers do
+              xml.string tracking_number
+          end
+        end
+      end
+      req
+    end
+    
 
     def add_shipment_notification(xml, options)
       xml['tns'].ShipmentNotification do
@@ -785,6 +807,11 @@ module ActiveShipping
       StampsReprintResponse.new(true, '', {}, response_options)
     end
     
+    def parse_cancel_indicium_response(indicium, response_options)      
+      parse_authenticator(indicium)
+      StampsCancelIndiciumResponse.new(true, '', {}, response_options)
+    end
+    
 
     def parse_content(node, child)
       return unless node.at(child) && node.at(child).text != ''
@@ -908,5 +935,17 @@ module ActiveShipping
       @url             = options[:url]
     end
   end
+  
+  class StampsCancelIndiciumResponse < Response
+    include ActiveUtils::PostsData
+
+    attr_reader  :url
+
+    def initialize(success, message, params = {}, options = {})
+      super
+      @url             = options[:url]
+    end
+  end
+  
   
 end
