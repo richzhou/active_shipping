@@ -427,7 +427,6 @@ module ActiveShipping
     
 
     def build_cancel_indicium_request(tracking_number, options)
-      puts "tracking_number is #{tracking_number}"
       tracking_numbers = [tracking_number]
       req = build_header do |xml|
         xml['tns'].CancelIndicium do
