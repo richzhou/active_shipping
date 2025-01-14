@@ -26,7 +26,6 @@ ActiveShipping::Carriers.register :UPS,              'active_shipping/carriers/u
 ActiveShipping::Carriers.register :USPS,             'active_shipping/carriers/usps'
 ActiveShipping::Carriers.register :USPSReturns,      'active_shipping/carriers/usps_returns'
 ActiveShipping::Carriers.register :FedEx,            'active_shipping/carriers/fedex'
-ActiveShipping::Carriers.register :FedExRest,        'active_shipping/carriers/fedex_rest'
 ActiveShipping::Carriers.register :Shipwire,         'active_shipping/carriers/shipwire'
 ActiveShipping::Carriers.register :Kunaki,           'active_shipping/carriers/kunaki'
 ActiveShipping::Carriers.register :CanadaPost,       'active_shipping/carriers/canada_post'
