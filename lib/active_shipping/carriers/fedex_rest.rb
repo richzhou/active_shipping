@@ -194,7 +194,7 @@ module ActiveShipping
               shipDateStamp: rest_ship_date(options),
               rateRequestType: ['ACCOUNT'],
               pickupType: 'DROPOFF_AT_FEDEX_LOCATION',
-              PackagingType: options[:packaging_type] || 'YOUR_PACKAGING',
+              packagingType: options[:packaging_type] || 'YOUR_PACKAGING',
               smartPostInfoDetail:{
                   indicia: options[:smart_post_indicia] || 'PARCEL_SELECT',
                   hubId: options[:smart_post_hub_id] || 5902
@@ -221,17 +221,17 @@ module ActiveShipping
           accountNumber: {
               value: @options[:account]
           },
-          labelResponseOptions: 'URL_ONLY',
+          labelResponseOptions: 'LABEL',
           requestedShipment: {
 
               shipDateStamp: rest_ship_date(options),
               pickupType: 'DROPOFF_AT_FEDEX_LOCATION',
-              PackagingType: options[:packaging_type] || 'YOUR_PACKAGING',
+              packagingType: options[:packaging_type] || 'YOUR_PACKAGING',
               serviceType: options[:service_type] || 'FEDEX_GROUND',
               rateRequestType: ['ACCOUNT'],
               totalPackageCount: packages.size,
               shipper: build_contact_address(options[:shipper] || origin),
-              recipients: [build_contact_address(destination)],
+              recipients: [build_contact_address(destination, true)],
               origin: build_contact_address(origin),
               shippingChargesPayment: {
                   paymentType: 'SENDER',
@@ -279,9 +279,10 @@ module ActiveShipping
     def parse_rate_response(origin, destination, packages, response, options)
 
       response = JSON.parse(response)
-      # success = response_success?(xml)
-      # message = response_message(xml)
+      success = response_success?(response)
+      message = response_message(response)
       missing_field = false
+
       rate_estimates = response['output']['rateReplyDetails'].map do |rated_shipment|
         begin
 
@@ -325,7 +326,7 @@ module ActiveShipping
       end
 
 
-      RateResponse.new(true, 'message', response, :rates => rate_estimates, :xml => response, :request => last_request, :log_xml => options[:log_xml])
+      RateResponse.new(success, message, response, :rates => rate_estimates, :xml => response, :request => last_request, :log_xml => options[:log_xml])
 
     end
 
@@ -344,24 +345,32 @@ module ActiveShipping
     end
 
     def parse_ship_response(response)
-      tracking_number = nil
-      base_64_image = nil
-      commercial_invoice = nil
-      labels = []
-      xml = build_document(response, 'ProcessShipmentReply')
-      success = response_success?(xml)
-      message = response_message(xml)
 
-      response_info = Hash.from_xml(response)
+      response = JSON.parse(response)
+
+      shipment_transaction = response['output']['transactionShipments'].first
+
+      labels             = []
+      base_64_image      = nil
+      tracking_number    = nil
+      commercial_invoice = nil
+
+
+      success = response_success?(response)
+      message = response_message(response)
+
       if success
-        tracking_number = xml.css("CompletedPackageDetails TrackingIds TrackingNumber").last.text
-        base_64_image = xml.css("Label Image").text
+        tracking_number = shipment_transaction['masterTrackingNumber']
+        base_64_image   = shipment_transaction['pieceResponses'].first['packageDocuments'].first['encodedLabel']
         labels = [Label.new(tracking_number, Base64.decode64(base_64_image))]
-        commercial_invoice = xml.xpath("//ShipmentDocuments[Type='COMMERCIAL_INVOICE']//Image").text
-        commercial_invoice = nil if commercial_invoice.blank?
+        shipment_doc = shipment_transaction['shipmentDocuments'] #xml.xpath("//ShipmentDocuments[Type='COMMERCIAL_INVOICE']//Image").text
+        unless shipment_doc.blank?
+          commercial_invoice = shipment_doc.first['url']
+        end
+
       end
 
-      LabelResponse.new(success, message, response_info, {labels: labels, commercial_invoice: commercial_invoice})
+      LabelResponse.new(true, message, response, {labels: labels, commercial_invoice: commercial_invoice})
     end
 
     def business_days_from(date, days, is_home_delivery=false)
@@ -526,11 +535,13 @@ module ActiveShipping
     end
 
     def response_success?(response)
-
+      !response['output'].blank?
     end
 
     def response_message(response)
-
+      errors = response['errors']
+      return "" if errors.nil?
+      errors.collect{|e| "code: #{e['code']} - message: #{e['message']}"}.join(' , ')
     end
 
     def commit(url, request, test = false)
@@ -589,29 +600,28 @@ module ActiveShipping
       %w(US LR MM).include?(location.country_code(:alpha2))
     end
 
-    def build_address(location)
-      {
+    def build_address(location, add_residential=true)
+      address = {
           address: {
               streetLines: street_address(location),
               city: location.city,
               postalCode: location.postal_code,
-              countryCode: location.country_code(:alpha2),
-              residential: !location.commercial?
-          }
+              stateOrProvinceCode: location.state,
+              countryCode: location.country_code(:alpha2)
+          }.reject { |_, i| i.nil? || i.empty? }
       }
-
+      address[:address].merge!(residential: !location.commercial?) if add_residential
+      address
     end
 
-    def build_contact_address(location)
+    def build_contact_address(location, add_residential=false)
       {
           contact: {
               personName: location.name,
-              # emailAddress: '',
-              # phoneExtension: '',
               phoneNumber: location.phone,
               companyName: location.company
-          }
-      }.merge(build_address(location))
+          }.reject { |_, i| i.nil? || i.empty? }
+      }.merge(build_address(location, add_residential))
     end
 
     def street_address(location)
@@ -663,9 +673,8 @@ module ActiveShipping
           end
 
           detail = detail.merge(customerReferences: cus_ref_type)
-
         end
-
+        detail
       end
 
     end
