@@ -217,7 +217,7 @@ module ActiveShipping
       label_format = options[:label_format] ? options[:label_format].upcase : 'PNG'
       label_size   = options[:label_size]   ? options[:label_size]          : 'STOCK_4X6'
 
-      {
+      shipment = {
           accountNumber: {
               value: @options[:account]
           },
@@ -250,6 +250,104 @@ module ActiveShipping
           }
       }
 
+      if options[:international]
+
+        shipment_special_services = { etdDetail: { requestedDocumentTypes: ['COMMERCIAL_INVOICE'] } }
+
+        if ELECTRONIC_TRADE_DOCUMENT_COUNTRIES.include?(destination.country_code)
+          shipment_special_services.merge!( specialServiceTypes: ['ELECTRONIC_TRADE_DOCUMENTS'] )
+        end
+
+        shipment[:requestedShipment].merge!(shipmentSpecialServices: shipment_special_services)
+
+        if options[:duty_sender]
+          payment_type = 'SENDER'
+        else
+          payment_type = 'RECIPIENT'
+        end
+
+        custom_clearence_detail = {
+            dutiesPayment: {
+                paymentType: payment_type
+            },
+            commercialInvoice: {
+                comments: [''],
+                termsOfSale: '',
+                customerReferences: [
+                    {
+                        customerReferenceType: 'CUSTOMER_REFERENCE',
+                        value: ''
+                    }
+                ]
+            },
+            totalCustomsValue: {
+                amount: packages.first.options[:value],
+                currency: packages.first.options[:currency]
+            }
+        }
+
+        if options[:shipper]
+          payor = { responsibleParty: build_contact_address(options[:shipper]).merge( accountNumber: { value: @options[:account] }) }
+          custom_clearence_detail[:dutiesPayment].merge!(payor: payor)
+        end
+
+        contents_description = packages.map {|p| p.options[:description]}.compact.join(',')
+
+        index       = 0
+        commodities = []
+
+        packages.each do |p|
+
+          next if p.options[:order_lines].nil?
+
+          p.options[:order_lines].each do |line|
+
+            index += 1
+
+            price = line[:unit_price].to_d
+            if price == 0
+              price = 1
+            end
+
+            commodity = {
+                numberOfPieces: 1,
+                description: line[:description],
+                countryOfManufacture: packages.first.options[:country_of_manufacture],
+                quantity: line[:quantity].to_i,
+                quantityUnits: 'EA',
+                unitPrice:{
+                    amount: line[:unit_price],
+                    currency: packages.first.options[:currency_code]
+                },
+                weight: {
+                    units: line[:weight_unit],
+                    value: line[:weight]
+                },
+                customsValue: {
+                    amount: price,
+                    currency: packages.first.options[:currency_code]
+                }
+            }
+
+            if line[:harmonized_code]
+              commodity.merge!(harmonizedCode: line[:harmonized_code])
+            end
+
+            commodities << commodity
+
+          end
+
+        end
+
+        unless commodities.blank?
+          custom_clearence_detail.merge!(commodities: commodities)
+        end
+
+        shipment.merge!(customsClearanceDetail: custom_clearence_detail)
+
+      end
+
+      shipment
 
     end
 
