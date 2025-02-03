@@ -180,7 +180,9 @@ module ActiveShipping
     def build_rate_request(origin, destination, packages, options = {})
       imperial = location_uses_imperial(origin)
       freight = has_freight?(options)
-      {
+      options[:international] = origin.country.name != destination.country.name
+
+      rate = {
           accountNumber: {
               value: @options[:account]
           },
@@ -206,6 +208,51 @@ module ActiveShipping
           }
 
       }
+
+      if options[:international]
+
+        custom_clearence_detail = {
+            dutiesPayment: {
+                paymentType: 'SENDER'
+            }
+        }
+
+        index       = 0
+        commodities = []
+
+        packages.each do |p|
+
+          index += 1
+
+          price = p.options[:value].to_d
+          if price == 0
+            price = 1
+          end
+
+          commodity = {
+              description: p.options[:description],
+              quantity: p.options[:item_count].to_i,
+              quantityUnits: 'EA',
+              weight: package_weight(p, imperial),
+              customsValue: {
+                  amount: price,
+                  currency: p.options[:currency_code]
+              }
+          }
+
+          commodities << commodity
+
+        end
+
+        unless commodities.blank?
+          custom_clearence_detail.merge!(commodities: commodities)
+        end
+
+        rate[:requestedShipment].merge!(customsClearanceDetail: custom_clearence_detail)
+
+      end
+
+      rate
 
     end
 
@@ -252,13 +299,13 @@ module ActiveShipping
 
       if options[:international]
 
-        shipment_special_services = { etdDetail: { requestedDocumentTypes: ['COMMERCIAL_INVOICE'] } }
-
-        if ELECTRONIC_TRADE_DOCUMENT_COUNTRIES.include?(destination.country_code)
-          shipment_special_services.merge!( specialServiceTypes: ['ELECTRONIC_TRADE_DOCUMENTS'] )
-        end
-
-        shipment[:requestedShipment].merge!(shipmentSpecialServices: shipment_special_services)
+        # shipment_special_services = { etdDetail: { requestedDocumentTypes: ['COMMERCIAL_INVOICE'] } }
+        #
+        # if ELECTRONIC_TRADE_DOCUMENT_COUNTRIES.include?(destination.country_code)
+        #   shipment_special_services.merge!( specialServiceTypes: ['ELECTRONIC_TRADE_DOCUMENTS'] )
+        # end
+        #
+        # shipment[:requestedShipment].merge!(shipmentSpecialServices: shipment_special_services)
 
         if options[:duty_sender]
           payment_type = 'SENDER'
@@ -270,16 +317,16 @@ module ActiveShipping
             dutiesPayment: {
                 paymentType: payment_type
             },
-            commercialInvoice: {
-                comments: [''],
-                termsOfSale: '',
-                customerReferences: [
-                    {
-                        customerReferenceType: 'CUSTOMER_REFERENCE',
-                        value: ''
-                    }
-                ]
-            },
+            #commercialInvoice: {
+            #    comments: [''],
+            #    termsOfSale: '',
+            #    customerReferences: [
+            #        {
+            #            customerReferenceType: 'CUSTOMER_REFERENCE',
+            #            value: ''
+            #        }
+            #    ]
+            #},
             totalCustomsValue: {
                 amount: packages.first.options[:value],
                 currency: packages.first.options[:currency]
@@ -305,12 +352,10 @@ module ActiveShipping
             index += 1
 
             price = line[:unit_price].to_d
-            if price == 0
-              price = 1
-            end
+            price = price * line[:unit_price].to_f
+            price = 1 if price == 0
 
             commodity = {
-                numberOfPieces: 1,
                 description: line[:description],
                 countryOfManufacture: packages.first.options[:country_of_manufacture],
                 quantity: line[:quantity].to_i,
@@ -343,7 +388,7 @@ module ActiveShipping
           custom_clearence_detail.merge!(commodities: commodities)
         end
 
-        shipment.merge!(customsClearanceDetail: custom_clearence_detail)
+        shipment[:requestedShipment].merge!(customsClearanceDetail: custom_clearence_detail)
 
       end
 
