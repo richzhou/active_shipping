@@ -196,7 +196,7 @@ module ActiveShipping
               shipDateStamp: rest_ship_date(options),
               rateRequestType: ['ACCOUNT'],
               pickupType: 'DROPOFF_AT_FEDEX_LOCATION',
-              packagingType: options[:packaging_type] || 'YOUR_PACKAGING',
+              packagingType: packages.first.options[:packaging_type] || options[:packaging_type] || 'YOUR_PACKAGING',
               smartPostInfoDetail:{
                   indicia: options[:smart_post_indicia] || 'PARCEL_SELECT',
                   hubId: options[:smart_post_hub_id] || 5902
@@ -273,7 +273,7 @@ module ActiveShipping
 
               shipDateStamp: rest_ship_date(options),
               pickupType: 'DROPOFF_AT_FEDEX_LOCATION',
-              packagingType: options[:packaging_type] || 'YOUR_PACKAGING',
+              packagingType: packages.first.options[:packaging_type] || options[:packaging_type] || 'YOUR_PACKAGING',
               serviceType: options[:service_type] || 'FEDEX_GROUND',
               rateRequestType: ['ACCOUNT'],
               totalPackageCount: packages.size,
