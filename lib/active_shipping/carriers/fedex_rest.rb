@@ -178,9 +178,14 @@ module ActiveShipping
     protected
 
     def build_rate_request(origin, destination, packages, options = {})
+
       imperial = location_uses_imperial(origin)
       freight = has_freight?(options)
       options[:international] = origin.country.name != destination.country.name
+
+      packaging_type = packages.first.options[:packaging_type]
+      packaging_type =  options[:packaging_type] if packaging_type.blank?
+      packaging_type = 'YOUR_PACKAGING'          if packaging_type.blank?
 
       rate = {
           accountNumber: {
@@ -196,7 +201,7 @@ module ActiveShipping
               shipDateStamp: rest_ship_date(options),
               rateRequestType: ['ACCOUNT'],
               pickupType: 'DROPOFF_AT_FEDEX_LOCATION',
-              packagingType: packages.first.options[:packaging_type] || options[:packaging_type] || 'YOUR_PACKAGING',
+              packagingType: packaging_type,
               smartPostInfoDetail:{
                   indicia: options[:smart_post_indicia] || 'PARCEL_SELECT',
                   hubId: options[:smart_post_hub_id] || 5902
@@ -264,6 +269,10 @@ module ActiveShipping
       label_format = options[:label_format] ? options[:label_format].upcase : 'PNG'
       label_size   = options[:label_size]   ? options[:label_size]          : 'STOCK_4X6'
 
+      packaging_type = packages.first.options[:packaging_type]
+      packaging_type =  options[:packaging_type] if packaging_type.blank?
+      packaging_type = 'YOUR_PACKAGING'          if packaging_type.blank?
+
       shipment = {
           accountNumber: {
               value: @options[:account]
@@ -273,7 +282,7 @@ module ActiveShipping
 
               shipDateStamp: rest_ship_date(options),
               pickupType: 'DROPOFF_AT_FEDEX_LOCATION',
-              packagingType: packages.first.options[:packaging_type] || options[:packaging_type] || 'YOUR_PACKAGING',
+              packagingType: packaging_type,
               serviceType: options[:service_type] || 'FEDEX_GROUND',
               rateRequestType: ['ACCOUNT'],
               totalPackageCount: packages.size,
