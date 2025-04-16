@@ -173,6 +173,16 @@ module ActiveShipping
       35
     end
 
+    def void_shipment(tracking, options={})
+      options = @options.merge(options)
+      request = build_delete_shipment_request(tracking)
+      logger.debug(request) if logger
+
+      response = commit('/ship/v1/shipments/cancel', save_request(request), options[:test] || false )
+
+      parse_delete_shipment_response(response)
+    end
+
 
 
     protected
@@ -404,6 +414,33 @@ module ActiveShipping
       shipment
 
     end
+
+    def build_delete_shipment_request(tracking)
+
+      shipment = {
+          accountNumber: {
+              value: @options[:account]
+          },
+          deletionControl: "DELETE_ALL_PACKAGES",
+          trackingNumber: tracking
+      }
+
+      shipment
+
+    end
+
+    def parse_delete_shipment_response(response)
+      response = JSON.parse(response)
+      success = response_success?(response)
+      message = response_message(response)
+
+      if success
+        true
+      else
+        raise ResponseError.new("Delete shipment failed with message: #{message}")
+      end
+    end
+
 
     def build_freight_shipment_detail_node(xml, freight_options, packages, imperial)
       xml.FreightShipmentDetail do
@@ -663,18 +700,6 @@ module ActiveShipping
       )
     end
 
-    def parse_delete_shipment_response(response)
-      xml = build_document(response, 'ShipmentReply')
-
-      success = response_success?(xml)
-      message = response_message(xml)
-
-      if success
-        true
-      else
-        raise ResponseError.new("Delete shipment failed with message: #{message}")
-      end
-    end
 
     def ship_timestamp(delay_in_hours)
       delay_in_hours ||= 0
