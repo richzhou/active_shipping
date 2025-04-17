@@ -178,7 +178,7 @@ module ActiveShipping
       request = build_delete_shipment_request(tracking)
       logger.debug(request) if logger
 
-      response = commit('/ship/v1/shipments/cancel', save_request(request), options[:test] || false )
+      response = commit('/ship/v1/shipments/cancel', save_request(request), options[:test] || false, :put )
 
       parse_delete_shipment_response(response)
     end
@@ -721,7 +721,7 @@ module ActiveShipping
       errors.collect{|e| "code: #{e['code']} - message: #{e['message']}"}.join(' , ')
     end
 
-    def commit(url, request, test = false)
+    def commit(url, request, test = false, method = :post)
 
       host = test ? TEST_HOST : LIVE_HOST
       url = "#{host}#{url}"
@@ -730,7 +730,7 @@ module ActiveShipping
           'Content-Type' =>  'application/json',
           'Authorization' => "Bearer #{@options[:access_token]}"
       }
-      ssl_post(url, request.to_json, headers)
+      ssl_request(method, url, request.to_json, headers)
     end
 
     def parse_transit_times(times)
