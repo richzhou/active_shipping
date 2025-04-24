@@ -149,6 +149,7 @@ module ActiveShipping
       packages = Array(packages)
 
       rate_request = build_rate_request(origin, destination, packages, options)
+      options[:logger].info(rate_request) if options[:logger]
 
       response = commit('/rate/v1/rates/quotes', save_request(rate_request), (options[:test] || false))
 
@@ -163,7 +164,7 @@ module ActiveShipping
       raise Error, "Multiple packages are not supported yet." if packages.length > 1
 
       request = build_shipment_request(origin, destination, packages, options)
-      logger.debug(request) if logger
+      options[:logger].info(rate_request) if options[:logger]
       response = commit('/ship/v1/shipments', save_request(request), options[:test] || false )
       parse_ship_response(response)
     end
