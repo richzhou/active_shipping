@@ -838,6 +838,10 @@ module ActiveShipping
                 }
             }
         }
+        
+        if pkg.options[:fedex_one_rate]
+          detail[:specialServicesRequested]= {specialServiceTypes: ['FEDEX_ONE_RATE']}
+        end
 
         reference_numbers = Array(pkg.options[:reference_numbers])
 
