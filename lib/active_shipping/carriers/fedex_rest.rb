@@ -312,7 +312,7 @@ module ActiveShipping
                   labelStockType: label_size
 
               },
-              requestedPackageLineItems: shipment_packages_detail(packages, imperial)
+              requestedPackageLineItems: shipment_packages_detail(packages, imperial, options)
 
           }
       }
@@ -824,7 +824,7 @@ module ActiveShipping
       end
     end
 
-    def shipment_packages_detail(packages, imperial)
+    def shipment_packages_detail(packages, imperial, options)
       packages.collect do |pkg|
 
         detail = {
@@ -840,9 +840,13 @@ module ActiveShipping
             }
         }
         
+        options[:logger].info(pkg.options[:fedex_one_rate]) if options[:logger]
+        
         if pkg.options[:fedex_one_rate]
           detail[:specialServicesRequested]= {specialServiceTypes: ['FEDEX_ONE_RATE']}
         end
+
+        options[:logger].info(detail) if options[:logger]
 
         reference_numbers = Array(pkg.options[:reference_numbers])
 
