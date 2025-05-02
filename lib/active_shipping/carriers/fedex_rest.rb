@@ -164,7 +164,7 @@ module ActiveShipping
       raise Error, "Multiple packages are not supported yet." if packages.length > 1
 
       request = build_shipment_request(origin, destination, packages, options)
-      options[:logger].info(rate_request) if options[:logger]
+      options[:logger].info(request) if options[:logger]
       response = commit('/ship/v1/shipments', save_request(request), options[:test] || false )
       parse_ship_response(response)
     end
@@ -211,13 +211,14 @@ module ActiveShipping
               recipient: build_address(destination),
               shipDateStamp: rest_ship_date(options),
               rateRequestType: ['ACCOUNT'],
-              pickupType: 'DROPOFF_AT_FEDEX_LOCATION',
+              pickupType: options[:pickup_type] || 'USE_SCHEDULED_PICKUP',
               packagingType: packaging_type,
               smartPostInfoDetail:{
                   indicia: options[:smart_post_indicia] || 'PARCEL_SELECT',
                   hubId: options[:smart_post_hub_id] || 5902
               },
-              requestedPackageLineItems: rate_packages_detail(packages, imperial),
+              shipmentSpecialServices: options['FEDEX_ONE_RATE'] ? {specialServiceTypes: ['FEDEX_ONE_RATE']} : nil,              
+              requestedPackageLineItems: rate_packages_detail(packages, imperial, options),
               totalPackageCount: packages.size,
               carrierCodes: ['FDXE', 'FDXG']
 
@@ -300,6 +301,7 @@ module ActiveShipping
               shipper: build_contact_address(options[:shipper] || origin),
               recipients: [build_contact_address(destination, true)],
               origin: build_contact_address(origin),
+              shipmentSpecialServices: options['FEDEX_ONE_RATE'] ? {specialServiceTypes: ['FEDEX_ONE_RATE']} : nil,                            
               shippingChargesPayment: {
                   paymentType: 'SENDER',
                   payor: {
@@ -814,13 +816,15 @@ module ActiveShipping
       end
     end
 
-    def rate_packages_detail(packages, imperial)
+    def rate_packages_detail(packages, imperial, options)
       packages.collect do |pkg|
-        {
+        detail = {
             groupPackageCount: 1,
             weight: package_weight(pkg, imperial),
             dimensions: package_dimensions(pkg, imperial)
         }
+           
+        detail
       end
     end
 
@@ -839,14 +843,8 @@ module ActiveShipping
                 }
             }
         }
-        
-        options[:logger].info(pkg.options[:fedex_one_rate]) if options[:logger]
-        
-        if pkg.options[:fedex_one_rate]
-          detail[:specialServicesRequested]= {specialServiceTypes: ['FEDEX_ONE_RATE']}
-        end
-
-        options[:logger].info(detail) if options[:logger]
+                
+        options[:logger].info(pp detail) if options[:logger]
 
         reference_numbers = Array(pkg.options[:reference_numbers])
 
