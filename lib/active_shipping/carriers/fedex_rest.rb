@@ -351,7 +351,7 @@ module ActiveShipping
             #},
             totalCustomsValue: {
                 amount: packages.first.options[:value],
-                currency: packages.first.:currency]
+                currency: packages.first.options[:currency]
             }
         }
 
