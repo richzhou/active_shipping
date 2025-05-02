@@ -217,7 +217,7 @@ module ActiveShipping
                   indicia: options[:smart_post_indicia] || 'PARCEL_SELECT',
                   hubId: options[:smart_post_hub_id] || 5902
               },
-              shipmentSpecialServices: options['FEDEX_ONE_RATE'] ? {specialServiceTypes: ['FEDEX_ONE_RATE']} : nil,              
+              shipmentSpecialServices: options[:fedex_one_rate] ? {specialServiceTypes: ['FEDEX_ONE_RATE']} : nil,              
               requestedPackageLineItems: rate_packages_detail(packages, imperial, options),
               totalPackageCount: packages.size,
               carrierCodes: ['FDXE', 'FDXG']
@@ -301,7 +301,7 @@ module ActiveShipping
               shipper: build_contact_address(options[:shipper] || origin),
               recipients: [build_contact_address(destination, true)],
               origin: build_contact_address(origin),
-              shipmentSpecialServices: options['FEDEX_ONE_RATE'] ? {specialServiceTypes: ['FEDEX_ONE_RATE']} : nil,                            
+              shipmentSpecialServices: options[:fedex_one_rate] ? {specialServiceTypes: ['FEDEX_ONE_RATE']} : nil,                            
               shippingChargesPayment: {
                   paymentType: 'SENDER',
                   payor: {
@@ -351,7 +351,7 @@ module ActiveShipping
             #},
             totalCustomsValue: {
                 amount: packages.first.options[:value],
-                currency: packages.first.options[:currency]
+                currency: packages.first.:currency]
             }
         }
 
@@ -820,9 +820,10 @@ module ActiveShipping
       packages.collect do |pkg|
         detail = {
             groupPackageCount: 1,
-            weight: package_weight(pkg, imperial),
-            dimensions: package_dimensions(pkg, imperial)
+            weight: package_weight(pkg, imperial)
         }
+           
+        detail[:dimensions] = package_dimensions(pkg, imperial) unless options[:fedex_one_rate] #using fedex packaging not need for size
            
         detail
       end
