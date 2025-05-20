@@ -823,7 +823,6 @@ module ActiveShipping
             weight: package_weight(pkg, imperial)
         }
            
-        detail[:dimensions] = package_dimensions(pkg, imperial) unless options[:fedex_one_rate] #using fedex packaging not need for size
            
         detail
       end
@@ -835,7 +834,6 @@ module ActiveShipping
         detail = {
             groupPackageCount: 1,
             weight: package_weight(pkg, imperial),
-            dimensions: package_dimensions(pkg, imperial),
             packageSpecialServices: {
                 specialServiceTypes: ['SIGNATURE_OPTION'],
                 signatureOptionType: SIGNATURE_OPTION_CODES[pkg.options[:signature_option] || :default_for_service],
@@ -844,6 +842,8 @@ module ActiveShipping
                 }
             }
         }
+        
+        detail[:dimensions] = package_dimensions(pkg, imperial) unless options[:fedex_one_rate] #using fedex packaging not need for size        
                 
         options[:logger].info(pp detail) if options[:logger]
 
