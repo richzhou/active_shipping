@@ -790,7 +790,9 @@ module ActiveShipping
               countryCode: location.country_code(:alpha2)
           }.reject { |_, i| i.nil? || i.empty? }
       }
-      address[:address].merge!(residential: !location.commercial?) if add_residential
+      if add_residential && location.residential?#only mark residential if it is residential, otherwise leave blank
+        address[:address].merge!(residential: true) 
+      end
       address
     end
 
