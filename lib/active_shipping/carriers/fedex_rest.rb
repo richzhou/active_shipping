@@ -293,7 +293,7 @@ module ActiveShipping
           requestedShipment: {
 
               shipDateStamp: rest_ship_date(options),
-              pickupType: 'DROPOFF_AT_FEDEX_LOCATION',
+              pickupType: options[:pickup_type] || 'USE_SCHEDULED_PICKUP',
               packagingType: packaging_type,
               serviceType: options[:service_type] || 'FEDEX_GROUND',
               rateRequestType: ['ACCOUNT'],
@@ -318,6 +318,9 @@ module ActiveShipping
 
           }
       }
+      if options[:saturday_delivery]
+        shipment[:requestedShipment][:serviceOptions] = {saturdayDelivery: true}
+      end
 
       if options[:international]
 
