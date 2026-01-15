@@ -517,7 +517,7 @@ module ActiveShipping
 
               contents_description = packages.map {|p| p.options[:description]}.compact.join(',')
               unless contents_description.empty?
-                xml.Description(contents_description)
+                xml.Description(contents_description[0, 50])
               end
             end
 
@@ -639,7 +639,7 @@ module ActiveShipping
               xml.CommodityCode(package.options[:commodity_code])
               xml.OriginCountryCode(package.options[:country_of_manufacture])
               xml.Unit do |xml|
-                xml.Value(package.options[:value] / (package.options[:item_count] || 1))
+                xml.Value((package.options[:value].to_f / [package.options[:item_count].to_i, 1].max).round(2))
                 xml.Number((package.options[:item_count] || 1))
                 xml.UnitOfMeasurement do |xml|
                   # NMB = number. You can specify units in barrels, boxes, etc. Codes are in the api docs.
